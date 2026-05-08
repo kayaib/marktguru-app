@@ -167,7 +167,7 @@ def _fetch_leaflets(api_key: str) -> list[dict]:
             "valid_from": _fmt_date(lf.get("validFrom")),
             "valid_until": _fmt_date(lf.get("validTo")),
             "cover_url": _leaflet_image_url(leaflet_id),
-            "url": f"https://www.marktguru.de/l/{flight_id}",
+            "url": f"https://www.marktguru.de/rp/{re.sub(r'[^a-z0-9]+', '-', advertiser.get('name','').lower()).strip('-')}-prospekte",
         })
     return leaflets
 
