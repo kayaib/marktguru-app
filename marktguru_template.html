@@ -52,14 +52,6 @@
       display: flex; align-items: center; gap: 10px;
       width: 100%;
     }
-    .nav-search { flex: 1; position: relative; min-width: 0; }
-
-    @media (min-width: 600px) {
-      nav { flex-wrap: nowrap; padding-top: var(--safe-top); height: calc(var(--nav-h) + var(--safe-top)); }
-      .nav-top { width: auto; flex: none; }
-      .nav-search { flex: 1; max-width: 460px; }
-    }
-
     .nav-brand {
       color: #fff; font-size: 1.05rem; font-weight: 800;
       letter-spacing: -0.3px; white-space: nowrap; flex-shrink: 0;
@@ -68,9 +60,17 @@
       font-size: 0.65rem; font-weight: 400;
       opacity: 0.8; display: block; margin-top: -1px;
     }
-
+    #status-chip {
+      font-size: 0.72rem; color: rgba(255,255,255,0.8);
+      white-space: nowrap; display: flex; align-items: center; gap: 5px;
+      margin-left: auto; flex-shrink: 0;
+    }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #fff; flex-shrink: 0;
+    }
     .nav-search {
-      flex: 1; position: relative; min-width: 0;
+      width: 100%; position: relative;
     }
     .nav-search input {
       width: 100%; padding: 9px 36px 9px 14px;
@@ -93,14 +93,15 @@
     }
     .nav-search input:not(:placeholder-shown) ~ .x { display: block; }
 
-    #status-chip {
-      font-size: 0.72rem; color: rgba(255,255,255,0.8);
-      white-space: nowrap; display: flex; align-items: center; gap: 5px;
-      margin-left: auto; flex-shrink: 0;
-    }
-    .dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: #fff; flex-shrink: 0;
+    @media (min-width: 600px) {
+      nav {
+        flex-wrap: nowrap;
+        padding-top: var(--safe-top);
+        height: calc(var(--nav-h) + var(--safe-top));
+        align-items: center;
+      }
+      .nav-top { width: auto; flex: none; }
+      .nav-search { width: auto; flex: 1; max-width: 460px; }
     }
 
     /* ── Toolbar ── */
