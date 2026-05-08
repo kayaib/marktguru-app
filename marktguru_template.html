@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Angebote Köngen 73257</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f2f3f5;
+      --surface: #ffffff;
+      --primary: #00a650;
+      --primary-dark: #008040;
+      --primary-light: #e6f7ee;
+      --text: #1a1a1a;
+      --text-2: #444;
+      --muted: #777;
+      --border: #e2e2e2;
+      --radius: 12px;
+      --shadow: 0 1px 6px rgba(0,0,0,0.07);
+      --shadow-hover: 0 6px 20px rgba(0,0,0,0.13);
+      --nav-h: 58px;
+      --toolbar-h: 50px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 200;
+      background: var(--primary);
+      height: var(--nav-h);
+      display: flex; align-items: center;
+      padding: 0 20px; gap: 14px;
+      box-shadow: 0 2px 10px rgba(0,166,80,0.35);
+    }
+
+    .nav-brand {
+      color: #fff; font-size: 1.1rem; font-weight: 800;
+      letter-spacing: -0.3px; white-space: nowrap; flex-shrink: 0;
+    }
+    .nav-brand small {
+      font-size: 0.68rem; font-weight: 400;
+      opacity: 0.8; display: block; margin-top: -1px;
+    }
+
+    .nav-search {
+      flex: 1; max-width: 460px; position: relative;
+    }
+    .nav-search input {
+      width: 100%; padding: 8px 36px 8px 14px;
+      border: none; border-radius: 8px;
+      font-size: 0.9rem;
+      background: rgba(255,255,255,0.2); color: #fff;
+      outline: none; transition: background 0.15s;
+    }
+    .nav-search input::placeholder { color: rgba(255,255,255,0.6); }
+    .nav-search input:focus { background: rgba(255,255,255,0.3); }
+    .nav-search .x {
+      position: absolute; right: 9px; top: 50%;
+      transform: translateY(-50%);
+      background: none; border: none;
+      color: rgba(255,255,255,0.7); cursor: pointer;
+      font-size: 1rem; padding: 2px; display: none;
+    }
+    .nav-search input:not(:placeholder-shown) ~ .x { display: block; }
+
+    #status-chip {
+      font-size: 0.72rem; color: rgba(255,255,255,0.8);
+      white-space: nowrap; display: flex; align-items: center; gap: 5px;
+      flex-shrink: 0;
+    }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #fff; flex-shrink: 0;
+    }
+
+    /* ── Toolbar ── */
+    #toolbar {
+      position: sticky; top: var(--nav-h); z-index: 190;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: stretch;
+      overflow-x: auto; scrollbar-width: none;
+      padding: 0 12px; height: var(--toolbar-h);
+    }
+    #toolbar::-webkit-scrollbar { display: none; }
+
+    .tab {
+      flex-shrink: 0; padding: 0 14px;
+      border: none; background: none; cursor: pointer;
+      font-size: 0.82rem; font-weight: 600; color: var(--muted);
+      border-bottom: 3px solid transparent;
+      transition: color 0.12s, border-color 0.12s;
+      white-space: nowrap;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab .badge {
+      background: var(--bg); color: var(--muted);
+      font-size: 0.65rem; font-weight: 700;
+      padding: 1px 6px; border-radius: 20px;
+    }
+    .tab.active .badge { background: var(--primary-light); color: var(--primary); }
+
+    /* ── Controls row ── */
+    #controls {
+      max-width: 1300px; margin: 0 auto;
+      padding: 10px 16px 0;
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .sort-btn {
+      padding: 5px 12px;
+      border: 1.5px solid var(--border);
+      background: var(--surface); border-radius: 20px;
+      font-size: 0.77rem; font-weight: 600;
+      color: var(--text-2); cursor: pointer;
+      transition: all 0.12s;
+    }
+    .sort-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .sort-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+    #retailer-select {
+      padding: 5px 10px; border: 1.5px solid var(--border);
+      background: var(--surface); border-radius: 20px;
+      font-size: 0.77rem; font-weight: 600; color: var(--text-2);
+      cursor: pointer; outline: none;
+    }
+    #retailer-select:focus { border-color: var(--primary); }
+
+    #results-info {
+      margin-left: auto; font-size: 0.75rem; color: var(--muted);
+    }
+
+    /* ── Main ── */
+    main { max-width: 1300px; margin: 0 auto; padding: 14px 16px 60px; }
+
+    .section-title {
+      font-size: 1rem; font-weight: 700;
+      margin: 18px 0 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title .cnt {
+      background: var(--primary); color: #fff;
+      font-size: 0.65rem; font-weight: 700;
+      padding: 2px 7px; border-radius: 20px;
+    }
+
+    /* ── Leaflets ── */
+    #leaflets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 12px; margin-bottom: 6px;
+    }
+    .leaflet-card {
+      background: var(--surface); border-radius: var(--radius);
+      box-shadow: var(--shadow); overflow: hidden;
+      text-decoration: none; color: inherit; display: block;
+      transition: transform 0.13s, box-shadow 0.13s;
+    }
+    .leaflet-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+    .leaflet-card img {
+      width: 100%; aspect-ratio: 3/4; object-fit: cover;
+      display: block; background: #f0f0f0;
+    }
+    .leaflet-card .lc-body { padding: 8px 10px 10px; }
+    .leaflet-card .lc-retailer { font-weight: 700; font-size: 0.8rem; color: var(--primary); }
+    .leaflet-card .lc-meta {
+      font-size: 0.65rem; color: var(--muted); margin-top: 5px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .pages-pill {
+      background: var(--primary-light); color: var(--primary);
+      font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+    }
+    .offers-pill {
+      font-size: 0.65rem; color: var(--muted);
+    }
+
+    /* ── Products ── */
+    #products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .product-card {
+      background: var(--surface); border-radius: var(--radius);
+      box-shadow: var(--shadow); overflow: hidden;
+      display: flex; flex-direction: column;
+      transition: transform 0.13s, box-shadow 0.13s; cursor: pointer;
+    }
+    .product-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+
+    .pc-img-wrap {
+      width: 100%; aspect-ratio: 1;
+      background: #f7f7f7;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden; position: relative;
+    }
+    .pc-img-wrap img {
+      width: 100%; height: 100%;
+      object-fit: contain; padding: 10px;
+      mix-blend-mode: multiply;
+    }
+    .pc-img-wrap .no-img {
+      font-size: 2.2rem; color: #ccc;
+    }
+    .disc-badge {
+      position: absolute; top: 7px; right: 7px;
+      background: #e53935; color: #fff;
+      font-size: 0.68rem; font-weight: 800;
+      padding: 3px 7px; border-radius: 20px;
+      pointer-events: none;
+    }
+
+    .pc-body {
+      padding: 9px 11px 12px; flex: 1;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .pc-industry {
+      font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; padding: 2px 6px; border-radius: 4px;
+      width: fit-content; margin-bottom: 2px;
+    }
+    .pc-title { font-weight: 700; font-size: 0.86rem; line-height: 1.25; }
+    .pc-brand { font-size: 0.7rem; color: var(--muted); }
+    .pc-desc {
+      font-size: 0.71rem; color: var(--text-2); line-height: 1.4;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .pc-retailer {
+      font-size: 0.72rem; color: var(--primary); font-weight: 700;
+      margin-top: auto; padding-top: 5px;
+    }
+    .pc-price-row {
+      display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-top: 3px;
+    }
+    .pc-price { font-size: 1.1rem; font-weight: 800; color: #e53935; }
+    .pc-orig { font-size: 0.77rem; color: var(--muted); text-decoration: line-through; }
+    .pc-unit { font-size: 0.67rem; color: var(--muted); margin-top: 1px; }
+    .pc-valid { font-size: 0.66rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── Industry pill colours ── */
+    .ind-Supermarkt           { background:#e3f2fd; color:#1565c0; }
+    .ind-Discounter           { background:#f3e5f5; color:#6a1b9a; }
+    .ind-Drogerie             { background:#fce4ec; color:#880e4f; }
+    .ind-Baumarkt             { background:#fff8e1; color:#e65100; }
+    .ind-Elektromarkt         { background:#e8f5e9; color:#1b5e20; }
+    .ind-Mode                 { background:#fbe9e7; color:#bf360c; }
+    .ind-Sport                { background:#e0f7fa; color:#006064; }
+    .ind-Zoo                  { background:#f1f8e9; color:#33691e; }
+    .ind-Getränkemarkt        { background:#ede7f6; color:#4527a0; }
+    .ind-Möbelhaus            { background:#fff3e0; color:#bf360c; }
+    .ind-Essen                { background:#fff9c4; color:#f57f17; }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center; padding: 60px 20px;
+      color: var(--muted); font-size: 0.95rem;
+    }
+    .empty-state .icon { font-size: 2.5rem; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+
+<script>window.__DATA__ = __DATA_PLACEHOLDER__;</script>
+
+<nav>
+  <div class="nav-brand">
+    Angebote Köngen
+    <small>73257 via marktguru.de</small>
+  </div>
+  <div class="nav-search">
+    <input type="search" id="q" placeholder="Produkt suchen… (z.B. Milch, Bier, Fernseher)" autocomplete="off" />
+    <button class="x" onclick="clearQ()">✕</button>
+  </div>
+  <div id="status-chip">
+    <div class="dot" id="dot"></div>
+    <span id="status-txt"></span>
+  </div>
+</nav>
+
+<div id="toolbar"></div>
+
+<div id="controls" style="display:none">
+  <span style="font-size:.78rem;color:var(--muted);font-weight:600">Sortieren:</span>
+  <button class="sort-btn active" data-sort="default" onclick="setSort(this)">Standard</button>
+  <button class="sort-btn" data-sort="price-asc"  onclick="setSort(this)">Preis ↑</button>
+  <button class="sort-btn" data-sort="price-desc" onclick="setSort(this)">Preis ↓</button>
+  <button class="sort-btn" data-sort="discount"   onclick="setSort(this)">Rabatt</button>
+  <button class="sort-btn" data-sort="az"         onclick="setSort(this)">A–Z</button>
+  <select id="retailer-select" onchange="setRetailer(this)"><option value="">Alle Märkte</option></select>
+  <span id="results-info"></span>
+</div>
+
+<main id="content"></main>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let allLeaflets = [];
+let allOffers   = [];
+let activeTab     = "Alle";
+let activeSort    = "default";
+let activeRetailer= "";
+let searchQuery   = "";
+
+const IND_ORDER = [
+  "Alle","Supermarkt","Discounter","Drogerie & Gesundheit","Baumarkt",
+  "Elektromarkt","Mode & Schuh","Sport & Outdoor","Zoo & Garten",
+  "Getränkemarkt","Möbelhaus","Essen & Genießen"
+];
+
+const IND_CSS = {
+  "Supermarkt":          "ind-Supermarkt",
+  "Discounter":          "ind-Discounter",
+  "Drogerie & Gesundheit":"ind-Drogerie",
+  "Baumarkt":            "ind-Baumarkt",
+  "Elektromarkt":        "ind-Elektromarkt",
+  "Mode & Schuh":        "ind-Mode",
+  "Sport & Outdoor":     "ind-Sport",
+  "Zoo & Garten":        "ind-Zoo",
+  "Getränkemarkt":       "ind-Getränkemarkt",
+  "Möbelhaus":           "ind-Möbelhaus",
+  "Essen & Genießen":    "ind-Essen",
+};
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+const esc = s => String(s ?? "")
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+  .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+
+// ── Filter + sort ────────────────────────────────────────────────────────────
+function filtered() {
+  let list = allOffers;
+
+  if (activeTab !== "Alle")
+    list = list.filter(o => o.industry === activeTab);
+
+  if (activeRetailer)
+    list = list.filter(o => o.retailer === activeRetailer);
+
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    list = list.filter(o =>
+      o.title.toLowerCase().includes(q) ||
+      (o.brand||"").toLowerCase().includes(q) ||
+      (o.description||"").toLowerCase().includes(q) ||
+      o.retailer.toLowerCase().includes(q) ||
+      (o.category||"").toLowerCase().includes(q)
+    );
+  }
+
+  switch (activeSort) {
+    case "price-asc":  list = [...list].sort((a,b)=>(a.price_value||999)-(b.price_value||999)); break;
+    case "price-desc": list = [...list].sort((a,b)=>(b.price_value||0)-(a.price_value||0)); break;
+    case "discount":   list = [...list].sort((a,b)=>(b.discount_pct||0)-(a.discount_pct||0)); break;
+    case "az":         list = [...list].sort((a,b)=>a.title.localeCompare(b.title,"de")); break;
+  }
+  return list;
+}
+
+function filteredLeaflets() {
+  if (activeTab === "Alle") return allLeaflets;
+  return allLeaflets.filter(l => l.industry === activeTab);
+}
+
+// ── Counts ───────────────────────────────────────────────────────────────────
+function indCounts() {
+  const c = { "Alle": allOffers.length };
+  for (const o of allOffers)
+    c[o.industry] = (c[o.industry]||0) + 1;
+  return c;
+}
+
+// ── Toolbar ──────────────────────────────────────────────────────────────────
+function renderToolbar() {
+  const counts = indCounts();
+  const present = new Set(allOffers.map(o => o.industry));
+  const tabs = IND_ORDER.filter(t => t === "Alle" || present.has(t));
+  document.getElementById("toolbar").innerHTML = tabs.map(t =>
+    `<button class="tab${t===activeTab?" active":""}" onclick="setTab('${esc(t)}')">${esc(t)}
+      <span class="badge">${(counts[t]||0).toLocaleString("de")}</span>
+    </button>`
+  ).join("");
+}
+
+// ── Retailer dropdown ─────────────────────────────────────────────────────────
+function populateRetailerSelect() {
+  const retailers = [...new Set(allOffers.map(o => o.retailer))].sort((a,b) => a.localeCompare(b,"de"));
+  const sel = document.getElementById("retailer-select");
+  sel.innerHTML = `<option value="">Alle Märkte</option>` +
+    retailers.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
+  sel.value = activeRetailer;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+  const offers   = filtered();
+  const leaflets = filteredLeaflets();
+
+  document.getElementById("results-info").textContent =
+    `${offers.length.toLocaleString("de")} von ${allOffers.length.toLocaleString("de")} Angeboten`;
+
+  let html = "";
+
+  // Leaflets (hide during search)
+  if (!searchQuery && leaflets.length > 0) {
+    html += `<div class="section-title">Prospekte <span class="cnt">${leaflets.length}</span></div>
+    <div id="leaflets-grid">`;
+    for (const l of leaflets) {
+      html += `<a class="leaflet-card" href="${esc(l.url)}" target="_blank" rel="noopener">
+        <img src="${esc(l.cover_url)}" alt="${esc(l.retailer)}" loading="lazy"
+             onerror="this.style.background='#eee';this.style.display='block'">
+        <div class="lc-body">
+          <div class="lc-retailer">${esc(l.retailer||"Prospekt")}</div>
+          <div class="lc-meta">
+            <span class="pages-pill">${l.page_count} S.</span>
+            <span class="offers-pill">${l.offer_count} Angebote</span>
+          </div>
+          <div style="font-size:.63rem;color:#aaa;margin-top:4px">${esc(l.valid_from)} – ${esc(l.valid_until)}</div>
+        </div>
+      </a>`;
+    }
+    html += `</div>`;
+  }
+
+  // Products
+  if (offers.length === 0) {
+    html += `<div class="empty-state">
+      <div class="icon">🔍</div>
+      Keine Angebote gefunden${searchQuery ? ` für „${esc(searchQuery)}"` : ""}.
+    </div>`;
+  } else {
+    const label = searchQuery
+      ? `Suchergebnisse für „${esc(searchQuery)}"`
+      : activeTab === "Alle" ? "Alle Angebote" : esc(activeTab);
+    html += `<div class="section-title" style="margin-top:${searchQuery?'8px':'20px'}">
+      ${label} <span class="cnt">${offers.length.toLocaleString("de")}</span>
+    </div>
+    <div id="products-grid">`;
+    for (const o of offers) {
+      const indCss = IND_CSS[o.industry] || "";
+      const disc = o.discount_pct ? `<div class="disc-badge">-${o.discount_pct}%</div>` : "";
+      const img = o.has_image
+        ? `<img src="${esc(o.image_url)}" alt="${esc(o.title)}" loading="lazy"
+               onerror="this.parentNode.innerHTML='<div class=no-img>🛒</div>'">`
+        : `<div class="no-img">🛒</div>`;
+      const brand = o.brand ? `<div class="pc-brand">${esc(o.brand)}</div>` : "";
+      const desc  = o.description && o.description !== o.title
+        ? `<div class="pc-desc">${esc(o.description)}</div>` : "";
+      const unit  = o.price_per_unit ? `<div class="pc-unit">${esc(o.price_per_unit)}</div>` : "";
+      const orig  = o.original_price ? `<span class="pc-orig">${esc(o.original_price)}</span>` : "";
+      html += `
+        <div class="product-card" onclick="window.open('${esc(o.retailer_url||"https://www.marktguru.de")}','_blank')">
+          <div class="pc-img-wrap">${img}${disc}</div>
+          <div class="pc-body">
+            <span class="pc-industry ${indCss}">${esc(o.industry)}</span>
+            <div class="pc-title">${esc(o.title)}</div>
+            ${brand}${desc}
+            <div class="pc-retailer">${esc(o.retailer)}</div>
+            <div class="pc-price-row">
+              <span class="pc-price">${esc(o.price)}</span>${orig}
+            </div>
+            ${unit}
+            <div class="pc-valid">${esc(o.valid_from)} – ${esc(o.valid_until)}</div>
+          </div>
+        </div>`;
+    }
+    html += `</div>`;
+  }
+
+  document.getElementById("content").innerHTML = html;
+}
+
+// ── Setters ───────────────────────────────────────────────────────────────────
+function setTab(t) { activeTab = t; activeRetailer = ""; populateRetailerSelect(); renderToolbar(); render(); }
+function setSort(btn) {
+  document.querySelectorAll(".sort-btn").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active"); activeSort = btn.dataset.sort; render();
+}
+function setRetailer(sel) { activeRetailer = sel.value; render(); }
+function clearQ() { document.getElementById("q").value=""; searchQuery=""; render(); }
+
+document.getElementById("q").addEventListener("input", e => {
+  searchQuery = e.target.value.trim(); render();
+});
+
+// ── Load from embedded data ────────────────────────────────────────────────────
+function loadData() {
+  const data = window.__DATA__;
+  allLeaflets = data.leaflets || [];
+  allOffers   = data.offers   || [];
+  renderToolbar();
+  populateRetailerSelect();
+  render();
+  document.getElementById("controls").style.display = "flex";
+  document.getElementById("status-txt").textContent =
+    `${allLeaflets.length} Prospekte · ${allOffers.length.toLocaleString("de")} Angebote`;
+}
+
+loadData();
+</script>
+</body>
+</html>
