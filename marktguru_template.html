@@ -40,13 +40,24 @@
     nav {
       position: sticky; top: 0; z-index: 200;
       background: var(--primary);
-      height: calc(var(--nav-h) + var(--safe-top));
-      padding-top: var(--safe-top);
-      display: flex; align-items: center;
-      padding-left: max(20px, env(safe-area-inset-left));
-      padding-right: max(20px, env(safe-area-inset-right));
-      gap: 10px;
+      padding-top: calc(var(--safe-top) + 10px);
+      padding-bottom: 10px;
+      padding-left: max(16px, env(safe-area-inset-left));
+      padding-right: max(16px, env(safe-area-inset-right));
+      display: flex; align-items: center; flex-wrap: wrap;
+      gap: 8px;
       box-shadow: 0 2px 10px rgba(0,166,80,0.35);
+    }
+    .nav-top {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%;
+    }
+    .nav-search { flex: 1; position: relative; min-width: 0; }
+
+    @media (min-width: 600px) {
+      nav { flex-wrap: nowrap; padding-top: var(--safe-top); height: calc(var(--nav-h) + var(--safe-top)); }
+      .nav-top { width: auto; flex: none; }
+      .nav-search { flex: 1; max-width: 460px; }
     }
 
     .nav-brand {
@@ -85,7 +96,7 @@
     #status-chip {
       font-size: 0.72rem; color: rgba(255,255,255,0.8);
       white-space: nowrap; display: flex; align-items: center; gap: 5px;
-      flex-shrink: 0;
+      margin-left: auto; flex-shrink: 0;
     }
     .dot {
       width: 7px; height: 7px; border-radius: 50%;
@@ -101,6 +112,9 @@
       overflow-x: auto; scrollbar-width: none;
       padding: 0 12px; height: var(--toolbar-h);
       -webkit-overflow-scrolling: touch;
+    }
+    @media (max-width: 599px) {
+      #toolbar { top: calc(var(--nav-h) + var(--safe-top) + 44px); }
     }
     #toolbar::-webkit-scrollbar { display: none; }
 
@@ -322,17 +336,19 @@
 <script>window.__DATA__ = __DATA_PLACEHOLDER__;</script>
 
 <nav>
-  <div class="nav-brand">
-    Angebote Köngen
-    <small>73257 via marktguru.de</small>
+  <div class="nav-top">
+    <div class="nav-brand">
+      Angebote Köngen
+      <small>73257 via marktguru.de</small>
+    </div>
+    <div id="status-chip">
+      <div class="dot" id="dot"></div>
+      <span id="status-txt"></span>
+    </div>
   </div>
   <div class="nav-search">
     <input type="search" id="q" placeholder="Produkt suchen… (z.B. Milch, Bier, Fernseher)" autocomplete="off" />
     <button class="x" onclick="clearQ()">✕</button>
-  </div>
-  <div id="status-chip">
-    <div class="dot" id="dot"></div>
-    <span id="status-txt"></span>
   </div>
 </nav>
 
