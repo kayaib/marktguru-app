@@ -492,6 +492,9 @@ function filtered() {
   if (activeRetailer)
     list = list.filter(o => o.retailer === activeRetailer);
 
+  if (favourites.size > 0)
+    list = list.filter(o => favourites.has(o.retailer));
+
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     list = list.filter(o =>
@@ -523,7 +526,8 @@ function filtered() {
 
 function filteredLeaflets() {
   let list = activeTab === "Alle" ? allLeaflets : allLeaflets.filter(l => l.industry === activeTab);
-  // fav leaflets first
+  if (favourites.size > 0)
+    list = list.filter(l => favourites.has(l.retailer));
   return [...list].sort((a,b) => {
     const af = favourites.has(a.retailer), bf = favourites.has(b.retailer);
     return (af && !bf) ? -1 : (!af && bf) ? 1 : 0;
@@ -592,9 +596,11 @@ function render() {
 
   // Products
   if (offers.length === 0) {
+    const hint = favourites.size > 0 ? `<div style="font-size:.82rem;margin-top:8px;color:var(--muted)">Tipp: Märkte in ⚙️ Einstellungen als Favorit markieren</div>` : "";
     html += `<div class="empty-state">
       <div class="icon">🔍</div>
       Keine Angebote gefunden${searchQuery ? ` für „${esc(searchQuery)}"` : ""}.
+      ${hint}
     </div>`;
   } else {
     const label = searchQuery
