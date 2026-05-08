@@ -67,6 +67,14 @@ def _fmt_date(iso: str | None) -> str:
         return iso
 
 
+def _retailer_slug(name: str) -> str:
+    """Convert retailer name to marktguru URL slug."""
+    s = name.lower()
+    s = s.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    return s
+
+
 def _image_url(offer_id: int | str, size: str = "medium") -> str:
     return f"https://{CDN_HOST}/api/v1/offers/{offer_id}/images/default/0/{size}.webp"
 
@@ -167,7 +175,7 @@ def _fetch_leaflets(api_key: str) -> list[dict]:
             "valid_from": _fmt_date(lf.get("validFrom")),
             "valid_until": _fmt_date(lf.get("validTo")),
             "cover_url": _leaflet_image_url(leaflet_id),
-            "url": f"https://www.marktguru.de/rp/{re.sub(r'[^a-z0-9]+', '-', advertiser.get('name','').lower()).strip('-')}-prospekte",
+            "url": f"https://www.marktguru.de/rp/{_retailer_slug(advertiser.get('name', ''))}-prospekte",
         })
     return leaflets
 
