@@ -582,6 +582,17 @@ function renderKWBar() {
     ).join("");
 }
 
+function leafletInKW(l, kwKey) {
+  if (kwKey === "alle") return true;
+  const [y,m,d] = kwKey.split("-").map(Number);
+  const mon = new Date(y, m-1, d);
+  const sun = new Date(y, m-1, d+6); sun.setHours(23,59,59,999);
+  // Leaflet belongs to a week if it STARTS in that week
+  const from = parseDate(l.valid_from);
+  if (!from) return true;
+  return from >= mon && from <= sun;
+}
+
 function offerInKW(o, kwKey) {
   if (kwKey === "alle") return true;
   const [y,m,d] = kwKey.split("-").map(Number);
@@ -649,7 +660,7 @@ function filteredLeaflets() {
   if (favourites.size > 0)
     list = list.filter(l => favourites.has(l.retailer));
   if (activeKW !== "alle")
-    list = list.filter(l => offerInKW(l, activeKW));
+    list = list.filter(l => leafletInKW(l, activeKW));
   return [...list].sort((a,b) => {
     const af = favourites.has(a.retailer), bf = favourites.has(b.retailer);
     return (af && !bf) ? -1 : (!af && bf) ? 1 : 0;
