@@ -503,54 +503,67 @@ const esc = s => String(s ?? "")
   .replace(/&/g,"&amp;").replace(/</g,"&lt;")
   .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
+// ── KW helpers ────────────────────────────────────────────────────────────────
 function parseDate(dmy) {
   if (!dmy) return null;
   const [d,m,y] = dmy.split(".");
-  return new Date(+y, +m-1, +d);
+  return new Date(+y, +m-1, +d);   // local midnight
 }
 
-// Monday of the week containing `date`
-function weekStart(date) {
-  const d = new Date(date);
-  const day = d.getDay() || 7;
-  d.setDate(d.getDate() - day + 1);
-  d.setHours(0,0,0,0);
+function mondayOf(date) {
+  const d = new Date(date); d.setHours(0,0,0,0);
+  const wd = d.getDay() || 7;      // Sun=7
+  d.setDate(d.getDate() - wd + 1);
   return d;
 }
 
-function isoWeek(date) {
-  const tmp = new Date(date);
-  tmp.setHours(0,0,0,0);
-  tmp.setDate(tmp.getDate() + 4 - (tmp.getDay()||7));
-  const yearStart = new Date(tmp.getFullYear(), 0, 1);
-  return Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+function isoWeek(monday) {
+  // ISO week number of a Monday (simplest approach: use Thursday of the week)
+  const thu = new Date(monday); thu.setDate(monday.getDate() + 3);
+  const jan4 = new Date(thu.getFullYear(), 0, 4);
+  const startOfWeek1 = mondayOf(jan4);
+  return Math.round((thu - startOfWeek1) / (7 * 86400000)) + 1;
 }
 
-// ── KW buckets ───────────────────────────────────────────────────────────────
+function dateKey(monday) {
+  // YYYY-MM-DD in local time (avoid UTC shift from toISOString)
+  const y = monday.getFullYear();
+  const m = String(monday.getMonth()+1).padStart(2,"0");
+  const d = String(monday.getDate()).padStart(2,"0");
+  return `${y}-${m}-${d}`;
+}
+
 function buildKWBuckets() {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const thisMonday = weekStart(today);
-  const buckets = new Map(); // key → { label, from, to }
+  const today     = new Date(); today.setHours(0,0,0,0);
+  const thisMon   = mondayOf(today);
+  const buckets   = new Map();
 
   for (const o of allOffers) {
     const from  = parseDate(o.valid_from);
     const until = parseDate(o.valid_until);
-    if (!until) continue;
-    // An offer belongs to a KW if it is still valid during that week's Monday
-    // We assign it to the earliest week it is active, capped to +4 weeks ahead
-    const start = from && from > thisMonday ? weekStart(from) : thisMonday;
-    const key = start.toISOString().slice(0,10);
-    if (!buckets.has(key)) {
-      const kw = isoWeek(start);
-      const isThis = start.getTime() === thisMonday.getTime();
-      const isNext = start.getTime() === thisMonday.getTime() + 7*86400000;
-      const label = isThis ? `Diese Woche (KW ${kw})`
-                  : isNext ? `Nächste Woche (KW ${kw})`
-                  : `KW ${kw}`;
-      buckets.set(key, { label, from: start, kw });
+    if (!until || until < today) continue;  // skip already-expired offers
+
+    // Which weeks does this offer span? Add a bucket for each week it covers.
+    // Start from max(thisMonday, offerStart's monday), up to 6 weeks ahead.
+    const offerMon = from && from > thisMon ? mondayOf(from) : thisMon;
+    for (let i = 0; i < 6; i++) {
+      const mon = new Date(offerMon); mon.setDate(offerMon.getDate() + i * 7);
+      const sun = new Date(mon);       sun.setDate(mon.getDate() + 6); sun.setHours(23,59,59,999);
+      if (mon > until) break;         // offer doesn't reach this week
+      if (mon.getTime() > thisMon.getTime() + 5 * 7 * 86400000) break; // max 6 weeks
+
+      const key = dateKey(mon);
+      if (!buckets.has(key)) {
+        const kw = isoWeek(mon);
+        const diff = Math.round((mon - thisMon) / (7 * 86400000));
+        const label = diff === 0 ? `Diese Woche (KW ${kw})`
+                    : diff === 1 ? `Nächste Woche (KW ${kw})`
+                    : `KW ${kw}`;
+        buckets.set(key, { label, kw, diff });
+      }
     }
   }
-  // Sort by date, limit to 6 future weeks
+
   return [...buckets.entries()]
     .sort(([a],[b]) => a.localeCompare(b))
     .slice(0, 6)
@@ -562,7 +575,8 @@ function renderKWBar() {
   const bar = document.getElementById("kw-bar");
   if (buckets.length <= 1) { bar.style.display = "none"; return; }
   bar.style.display = "flex";
-  bar.innerHTML = `<button class="kw-btn${activeKW==="alle"?" active":""}" onclick="setKW('alle')">Alle Wochen</button>` +
+  bar.innerHTML =
+    `<button class="kw-btn${activeKW==="alle"?" active":""}" onclick="setKW('alle')">Alle Wochen</button>` +
     buckets.map(b =>
       `<button class="kw-btn${activeKW===b.key?" active":""}" onclick="setKW('${b.key}')">${esc(b.label)}</button>`
     ).join("");
@@ -570,16 +584,15 @@ function renderKWBar() {
 
 function offerInKW(o, kwKey) {
   if (kwKey === "alle") return true;
-  const kwDate = new Date(kwKey);
-  const kwEnd  = new Date(kwDate.getTime() + 6*86400000);
-  kwEnd.setHours(23,59,59,999);
+  const [y,m,d] = kwKey.split("-").map(Number);
+  const mon = new Date(y, m-1, d);
+  const sun = new Date(y, m-1, d+6); sun.setHours(23,59,59,999);
   const from  = parseDate(o.valid_from);
   const until = parseDate(o.valid_until);
-  // offer overlaps the week if it starts before week end AND ends after week start
-  const starts = from  ? from  : new Date(0);
-  const ends   = until ? until : new Date(8640000000000000);
+  const starts = from  || new Date(0);
+  const ends   = until ? new Date(until.getTime()) : new Date(8640000000000000);
   ends.setHours(23,59,59,999);
-  return starts <= kwEnd && ends >= kwDate;
+  return starts <= sun && ends >= mon;
 }
 
 function saveFavourites() {
