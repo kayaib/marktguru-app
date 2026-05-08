@@ -139,6 +139,29 @@
     }
     .tab.active .badge { background: var(--primary-light); color: var(--primary); }
 
+    /* ── KW filter ── */
+    #kw-bar {
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px;
+      overflow-x: auto; scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    #kw-bar::-webkit-scrollbar { display: none; }
+    .kw-btn {
+      flex-shrink: 0;
+      padding: 5px 12px; border-radius: 20px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      font-size: 0.77rem; font-weight: 600; color: var(--text-2);
+      cursor: pointer; white-space: nowrap;
+      transition: all 0.12s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .kw-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .kw-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
     /* ── Controls row ── */
     #controls {
       max-width: 1300px; margin: 0 auto;
@@ -429,6 +452,7 @@
 </div>
 
 <div id="toolbar"></div>
+<div id="kw-bar" style="display:none"></div>
 
 <div id="controls" style="display:none">
   <span style="font-size:.78rem;color:var(--muted);font-weight:600">Sortieren:</span>
@@ -447,11 +471,12 @@
 // ── State ──────────────────────────────────────────────────────────────────
 let allLeaflets = [];
 let allOffers   = [];
-let activeTab     = "Alle";
-let activeSort    = "default";
-let activeRetailer= "";
-let searchQuery   = "";
-let favourites    = new Set(JSON.parse(localStorage.getItem("fav_retailers") || "[]"));
+let activeTab      = "Alle";
+let activeSort     = "default";
+let activeRetailer = "";
+let searchQuery    = "";
+let activeKW       = "alle";
+let favourites     = new Set(JSON.parse(localStorage.getItem("fav_retailers") || "[]"));
 
 const IND_ORDER = [
   "Alle","Supermarkt","Discounter","Drogerie & Gesundheit","Baumarkt",
@@ -478,6 +503,85 @@ const esc = s => String(s ?? "")
   .replace(/&/g,"&amp;").replace(/</g,"&lt;")
   .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
+function parseDate(dmy) {
+  if (!dmy) return null;
+  const [d,m,y] = dmy.split(".");
+  return new Date(+y, +m-1, +d);
+}
+
+// Monday of the week containing `date`
+function weekStart(date) {
+  const d = new Date(date);
+  const day = d.getDay() || 7;
+  d.setDate(d.getDate() - day + 1);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function isoWeek(date) {
+  const tmp = new Date(date);
+  tmp.setHours(0,0,0,0);
+  tmp.setDate(tmp.getDate() + 4 - (tmp.getDay()||7));
+  const yearStart = new Date(tmp.getFullYear(), 0, 1);
+  return Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+}
+
+// ── KW buckets ───────────────────────────────────────────────────────────────
+function buildKWBuckets() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const thisMonday = weekStart(today);
+  const buckets = new Map(); // key → { label, from, to }
+
+  for (const o of allOffers) {
+    const from  = parseDate(o.valid_from);
+    const until = parseDate(o.valid_until);
+    if (!until) continue;
+    // An offer belongs to a KW if it is still valid during that week's Monday
+    // We assign it to the earliest week it is active, capped to +4 weeks ahead
+    const start = from && from > thisMonday ? weekStart(from) : thisMonday;
+    const key = start.toISOString().slice(0,10);
+    if (!buckets.has(key)) {
+      const kw = isoWeek(start);
+      const isThis = start.getTime() === thisMonday.getTime();
+      const isNext = start.getTime() === thisMonday.getTime() + 7*86400000;
+      const label = isThis ? `Diese Woche (KW ${kw})`
+                  : isNext ? `Nächste Woche (KW ${kw})`
+                  : `KW ${kw}`;
+      buckets.set(key, { label, from: start, kw });
+    }
+  }
+  // Sort by date, limit to 6 future weeks
+  return [...buckets.entries()]
+    .sort(([a],[b]) => a.localeCompare(b))
+    .slice(0, 6)
+    .map(([key, v]) => ({ key, ...v }));
+}
+
+function renderKWBar() {
+  const buckets = buildKWBuckets();
+  const bar = document.getElementById("kw-bar");
+  if (buckets.length <= 1) { bar.style.display = "none"; return; }
+  bar.style.display = "flex";
+  bar.innerHTML = `<button class="kw-btn${activeKW==="alle"?" active":""}" onclick="setKW('alle')">Alle Wochen</button>` +
+    buckets.map(b =>
+      `<button class="kw-btn${activeKW===b.key?" active":""}" onclick="setKW('${b.key}')">${esc(b.label)}</button>`
+    ).join("");
+}
+
+function offerInKW(o, kwKey) {
+  if (kwKey === "alle") return true;
+  const kwDate = new Date(kwKey);
+  const kwEnd  = new Date(kwDate.getTime() + 6*86400000);
+  kwEnd.setHours(23,59,59,999);
+  const from  = parseDate(o.valid_from);
+  const until = parseDate(o.valid_until);
+  // offer overlaps the week if it starts before week end AND ends after week start
+  const starts = from  ? from  : new Date(0);
+  const ends   = until ? until : new Date(8640000000000000);
+  ends.setHours(23,59,59,999);
+  return starts <= kwEnd && ends >= kwDate;
+}
+
 function saveFavourites() {
   localStorage.setItem("fav_retailers", JSON.stringify([...favourites]));
 }
@@ -494,6 +598,9 @@ function filtered() {
 
   if (favourites.size > 0)
     list = list.filter(o => favourites.has(o.retailer));
+
+  if (activeKW !== "alle")
+    list = list.filter(o => offerInKW(o, activeKW));
 
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
@@ -692,6 +799,7 @@ function toggleFav(retailer) {
 
 // ── Setters ───────────────────────────────────────────────────────────────────
 function setTab(t) { activeTab = t; activeRetailer = ""; populateRetailerSelect(); renderToolbar(); render(); }
+function setKW(key) { activeKW = key; renderKWBar(); render(); }
 function setSort(btn) {
   document.querySelectorAll(".sort-btn").forEach(b=>b.classList.remove("active"));
   btn.classList.add("active"); activeSort = btn.dataset.sort; render();
@@ -709,6 +817,7 @@ function loadData() {
   allLeaflets = data.leaflets || [];
   allOffers   = data.offers   || [];
   renderToolbar();
+  renderKWBar();
   populateRetailerSelect();
   render();
   document.getElementById("controls").style.display = "flex";
