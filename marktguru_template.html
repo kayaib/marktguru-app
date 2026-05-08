@@ -303,6 +303,68 @@
     }
     .empty-state .icon { font-size: 2.5rem; margin-bottom: 12px; }
 
+    /* ── Settings button ── */
+    #settings-btn {
+      background: none; border: none; color: #fff;
+      font-size: 1.3rem; cursor: pointer; padding: 4px 6px;
+      flex-shrink: 0; line-height: 1;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Settings panel ── */
+    #settings-overlay {
+      display: none; position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,0.45);
+    }
+    #settings-overlay.open { display: block; }
+    #settings-panel {
+      position: absolute; top: 0; right: 0; bottom: 0;
+      width: min(340px, 92vw);
+      background: var(--surface);
+      display: flex; flex-direction: column;
+      box-shadow: -4px 0 24px rgba(0,0,0,0.18);
+      transform: translateX(100%);
+      transition: transform 0.25s ease;
+      padding-top: var(--safe-top);
+      padding-bottom: var(--safe-bottom);
+    }
+    #settings-overlay.open #settings-panel { transform: translateX(0); }
+    .sp-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sp-header h2 { font-size: 1rem; font-weight: 700; }
+    .sp-close {
+      background: none; border: none; font-size: 1.3rem;
+      color: var(--muted); cursor: pointer; padding: 4px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sp-section-label {
+      font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.6px; color: var(--muted);
+      padding: 14px 18px 6px;
+    }
+    .sp-list {
+      flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    }
+    .sp-row {
+      display: flex; align-items: center;
+      padding: 11px 18px; gap: 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    .sp-row:active { background: var(--bg); }
+    .sp-star {
+      font-size: 1.3rem; flex-shrink: 0; transition: transform 0.15s;
+    }
+    .sp-row.fav .sp-star { transform: scale(1.15); }
+    .sp-name { flex: 1; font-size: 0.9rem; font-weight: 500; }
+    .sp-count { font-size: 0.72rem; color: var(--muted); }
+
+    /* ── Fav badge on retailer label ── */
+    .fav-star { font-size: 0.75rem; margin-left: 2px; }
+
     /* ── Mobile ── */
     @media (max-width: 480px) {
       .nav-brand small { display: none; }
@@ -346,12 +408,25 @@
       <div class="dot" id="dot"></div>
       <span id="status-txt"></span>
     </div>
+    <button id="settings-btn" onclick="openSettings()" title="Einstellungen">⚙️</button>
   </div>
   <div class="nav-search">
     <input type="search" id="q" placeholder="Produkt suchen… (z.B. Avocado, Tofu, Fernseher)" autocomplete="off" />
     <button class="x" onclick="clearQ()">✕</button>
   </div>
 </nav>
+
+<!-- Settings panel -->
+<div id="settings-overlay" onclick="overlayClick(event)">
+  <div id="settings-panel">
+    <div class="sp-header">
+      <h2>Einstellungen</h2>
+      <button class="sp-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="sp-section-label">Lieblings-Supermärkte</div>
+    <div class="sp-list" id="sp-list"></div>
+  </div>
+</div>
 
 <div id="toolbar"></div>
 
@@ -376,6 +451,7 @@ let activeTab     = "Alle";
 let activeSort    = "default";
 let activeRetailer= "";
 let searchQuery   = "";
+let favourites    = new Set(JSON.parse(localStorage.getItem("fav_retailers") || "[]"));
 
 const IND_ORDER = [
   "Alle","Supermarkt","Discounter","Drogerie & Gesundheit","Baumarkt",
@@ -402,6 +478,10 @@ const esc = s => String(s ?? "")
   .replace(/&/g,"&amp;").replace(/</g,"&lt;")
   .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
+function saveFavourites() {
+  localStorage.setItem("fav_retailers", JSON.stringify([...favourites]));
+}
+
 // ── Filter + sort ────────────────────────────────────────────────────────────
 function filtered() {
   let list = allOffers;
@@ -423,18 +503,31 @@ function filtered() {
     );
   }
 
+  // favourites float to top (within the current sort)
+  const favFirst = (a, b) => {
+    const af = favourites.has(a.retailer), bf = favourites.has(b.retailer);
+    if (af && !bf) return -1;
+    if (!af && bf) return 1;
+    return 0;
+  };
+
   switch (activeSort) {
-    case "price-asc":  list = [...list].sort((a,b)=>(a.price_value||999)-(b.price_value||999)); break;
-    case "price-desc": list = [...list].sort((a,b)=>(b.price_value||0)-(a.price_value||0)); break;
-    case "discount":   list = [...list].sort((a,b)=>(b.discount_pct||0)-(a.discount_pct||0)); break;
-    case "az":         list = [...list].sort((a,b)=>a.title.localeCompare(b.title,"de")); break;
+    case "price-asc":  list = [...list].sort((a,b) => favFirst(a,b) || (a.price_value||999)-(b.price_value||999)); break;
+    case "price-desc": list = [...list].sort((a,b) => favFirst(a,b) || (b.price_value||0)-(a.price_value||0)); break;
+    case "discount":   list = [...list].sort((a,b) => favFirst(a,b) || (b.discount_pct||0)-(a.discount_pct||0)); break;
+    case "az":         list = [...list].sort((a,b) => favFirst(a,b) || a.title.localeCompare(b.title,"de")); break;
+    default:           list = [...list].sort(favFirst); break;
   }
   return list;
 }
 
 function filteredLeaflets() {
-  if (activeTab === "Alle") return allLeaflets;
-  return allLeaflets.filter(l => l.industry === activeTab);
+  let list = activeTab === "Alle" ? allLeaflets : allLeaflets.filter(l => l.industry === activeTab);
+  // fav leaflets first
+  return [...list].sort((a,b) => {
+    const af = favourites.has(a.retailer), bf = favourites.has(b.retailer);
+    return (af && !bf) ? -1 : (!af && bf) ? 1 : 0;
+  });
 }
 
 // ── Counts ───────────────────────────────────────────────────────────────────
@@ -462,7 +555,7 @@ function populateRetailerSelect() {
   const retailers = [...new Set(allOffers.map(o => o.retailer))].sort((a,b) => a.localeCompare(b,"de"));
   const sel = document.getElementById("retailer-select");
   sel.innerHTML = `<option value="">Alle Märkte</option>` +
-    retailers.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
+    retailers.map(r => `<option value="${esc(r)}">${favourites.has(r)?"★ ":""}${esc(r)}</option>`).join("");
   sel.value = activeRetailer;
 }
 
@@ -481,11 +574,12 @@ function render() {
     html += `<div class="section-title">Prospekte <span class="cnt">${leaflets.length}</span></div>
     <div id="leaflets-grid">`;
     for (const l of leaflets) {
+      const favMark = favourites.has(l.retailer) ? `<span class="fav-star">★</span>` : "";
       html += `<a class="leaflet-card" href="${esc(l.url)}" target="_blank" rel="noopener">
         <img src="${esc(l.cover_url)}" alt="${esc(l.retailer)}" loading="lazy"
              onerror="this.style.background='#eee';this.style.display='block'">
         <div class="lc-body">
-          <div class="lc-retailer">${esc(l.retailer||"Prospekt")}</div>
+          <div class="lc-retailer">${esc(l.retailer||"Prospekt")}${favMark}</div>
           <div class="lc-meta">
             <span class="pages-pill">${l.page_count} S.</span>
             <span class="offers-pill">${l.offer_count} Angebote</span>
@@ -523,6 +617,7 @@ function render() {
         ? `<div class="pc-desc">${esc(o.description)}</div>` : "";
       const unit  = o.price_per_unit ? `<div class="pc-unit">${esc(o.price_per_unit)}</div>` : "";
       const orig  = o.original_price ? `<span class="pc-orig">${esc(o.original_price)}</span>` : "";
+      const favMark = favourites.has(o.retailer) ? `<span class="fav-star">★</span>` : "";
       html += `
         <div class="product-card" onclick="window.open('${esc(o.retailer_url||"https://www.marktguru.de")}','_blank')">
           <div class="pc-img-wrap">${img}${disc}</div>
@@ -530,7 +625,7 @@ function render() {
             <span class="pc-industry ${indCss}">${esc(o.industry)}</span>
             <div class="pc-title">${esc(o.title)}</div>
             ${brand}${desc}
-            <div class="pc-retailer">${esc(o.retailer)}</div>
+            <div class="pc-retailer">${esc(o.retailer)}${favMark}</div>
             <div class="pc-price-row">
               <span class="pc-price">${esc(o.price)}</span>${orig}
             </div>
@@ -543,6 +638,51 @@ function render() {
   }
 
   document.getElementById("content").innerHTML = html;
+}
+
+// ── Settings panel ────────────────────────────────────────────────────────────
+function openSettings() {
+  const retailers = [...new Set(allOffers.map(o => o.retailer))].sort((a,b) => a.localeCompare(b,"de"));
+  const counts = {};
+  for (const o of allOffers) counts[o.retailer] = (counts[o.retailer]||0) + 1;
+
+  document.getElementById("sp-list").innerHTML = retailers.map(r => {
+    const isFav = favourites.has(r);
+    return `<div class="sp-row${isFav?" fav":""}" onclick="toggleFav('${esc(r)}')" id="sprow-${esc(r)}">
+      <span class="sp-star">${isFav ? "★" : "☆"}</span>
+      <span class="sp-name">${esc(r)}</span>
+      <span class="sp-count">${(counts[r]||0).toLocaleString("de")} Angebote</span>
+    </div>`;
+  }).join("");
+
+  document.getElementById("settings-overlay").classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+function closeSettings() {
+  document.getElementById("settings-overlay").classList.remove("open");
+  document.body.style.overflow = "";
+  render();
+  populateRetailerSelect();
+}
+
+function overlayClick(e) {
+  if (e.target === document.getElementById("settings-overlay")) closeSettings();
+}
+
+function toggleFav(retailer) {
+  if (favourites.has(retailer)) {
+    favourites.delete(retailer);
+  } else {
+    favourites.add(retailer);
+  }
+  saveFavourites();
+  const row = document.getElementById(`sprow-${esc(retailer)}`);
+  if (row) {
+    const isFav = favourites.has(retailer);
+    row.classList.toggle("fav", isFav);
+    row.querySelector(".sp-star").textContent = isFav ? "★" : "☆";
+  }
 }
 
 // ── Setters ───────────────────────────────────────────────────────────────────
