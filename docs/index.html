@@ -750,7 +750,7 @@ function render() {
         ? `<img src="${esc(o.image_url)}" alt="${esc(o.title)}" loading="lazy"
                onerror="this.parentNode.innerHTML='<div class=no-img>🛒</div>'">`
         : `<div class="no-img">🛒</div>`;
-      const brand = o.brand ? `<div class="pc-brand">${esc(o.brand)}</div>` : "";
+      const brand = o.brand && o.brand !== "thisisnobrand123" ? `<div class="pc-brand">${esc(o.brand)}</div>` : "";
       const desc  = o.description && o.description !== o.title
         ? `<div class="pc-desc">${esc(o.description)}</div>` : "";
       const unit  = o.price_per_unit ? `<div class="pc-unit">${esc(o.price_per_unit)}</div>` : "";
