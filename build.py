@@ -10,7 +10,7 @@ import sys
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from marktguru_crawler import fetch_all
+from combined_crawler import fetch_all
 
 TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "marktguru_template.html")
 OUTPUT   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "docs", "index.html")
