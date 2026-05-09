@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 import requests
 from bs4 import BeautifulSoup
 
-ZIP_CODE  = "73257"
+ZIP_CODE        = "73257"
+ZIP_CODE_REGION = "70173"  # Stuttgart — broader regional coverage for national leaflets
 CDN_HOST  = "mg2de.b-cdn.net"
 API_BASE  = "https://api.marktguru.de/api/v1"
 SITE_URL  = "https://www.marktguru.de"
@@ -83,11 +84,11 @@ def _leaflet_image_url(leaflet_id: int | str) -> str:
     return f"https://{CDN_HOST}/api/v1/leaflets/{leaflet_id}/images/pages/0/small.webp"
 
 
-def _fetch_industry(industry_id: int, industry_name: str, api_key: str) -> list[dict]:
+def _fetch_industry(industry_id: int, industry_name: str, api_key: str, zip_code: str = ZIP_CODE) -> list[dict]:
     """Fetch all offers for one industry, paginating if needed."""
     h = _api_headers(api_key)
     limit = 512
-    url = (f"{API_BASE}/offers?as=web&zipCode={ZIP_CODE}"
+    url = (f"{API_BASE}/offers?as=web&zipCode={zip_code}"
            f"&industryId={industry_id}&limit={limit}&offset=0")
     r = requests.get(url, headers=h, timeout=20)
     r.raise_for_status()
@@ -146,37 +147,36 @@ def _fetch_industry(industry_id: int, industry_name: str, api_key: str) -> list[
 
 
 def _fetch_leaflets(api_key: str) -> list[dict]:
-    """Fetch current brochures (leaflet flights) near the ZIP code."""
+    """Fetch current brochures from local ZIP + regional ZIP for broader coverage."""
     h = _api_headers(api_key)
-    url = f"{API_BASE}/leafletflights?as=web&zipCode={ZIP_CODE}&limit=100&offset=0"
-    r = requests.get(url, headers=h, timeout=20)
-    if r.status_code != 200:
-        return []
-    data = r.json()
-    results = data.get("results") or []
-
-    leaflets = []
     seen = set()
-    for lf in results:
-        flight_id = lf.get("id")
-        leaflet_id = lf.get("mainLeafletId") or flight_id
-        if flight_id in seen:
+    leaflets = []
+
+    for zip_code in [ZIP_CODE, ZIP_CODE_REGION]:
+        url = f"{API_BASE}/leafletflights?as=web&zipCode={zip_code}&limit=100&offset=0"
+        r = requests.get(url, headers=h, timeout=20)
+        if r.status_code != 200:
             continue
-        seen.add(flight_id)
-        advertiser = lf.get("advertiser") or {}
-        industry = lf.get("industry") or {}
-        leaflets.append({
-            "id": flight_id,
-            "leaflet_id": leaflet_id,
-            "retailer": advertiser.get("name") or "",
-            "industry": industry.get("name") or "",
-            "page_count": lf.get("pageCount") or "",
-            "offer_count": lf.get("offerCount") or 0,
-            "valid_from": _fmt_date(lf.get("validFrom")),
-            "valid_until": _fmt_date(lf.get("validTo")),
-            "cover_url": _leaflet_image_url(leaflet_id),
-            "url": f"https://www.marktguru.de/rp/{_retailer_slug(advertiser.get('name', ''))}-prospekte",
-        })
+        for lf in r.json().get("results") or []:
+            flight_id = lf.get("id")
+            if flight_id in seen:
+                continue
+            seen.add(flight_id)
+            leaflet_id = lf.get("mainLeafletId") or flight_id
+            advertiser = lf.get("advertiser") or {}
+            industry = lf.get("industry") or {}
+            leaflets.append({
+                "id": flight_id,
+                "leaflet_id": leaflet_id,
+                "retailer": advertiser.get("name") or "",
+                "industry": industry.get("name") or "",
+                "page_count": lf.get("pageCount") or "",
+                "offer_count": lf.get("offerCount") or 0,
+                "valid_from": _fmt_date(lf.get("validFrom")),
+                "valid_until": _fmt_date(lf.get("validTo")),
+                "cover_url": _leaflet_image_url(leaflet_id),
+                "url": f"https://www.marktguru.de/rp/{_retailer_slug(advertiser.get('name', ''))}-prospekte",
+            })
     return leaflets
 
 
@@ -192,24 +192,33 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
     all_offers: list[dict] = []
     seen_ids: set = set()
 
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        futures = {
-            pool.submit(_fetch_industry, ind_id, ind_name, api_key): ind_name
-            for ind_id, ind_name in TARGET_INDUSTRIES
-        }
+    # Fetch from both local and regional ZIP codes
+    tasks = [(ind_id, ind_name, ZIP_CODE) for ind_id, ind_name in TARGET_INDUSTRIES] + \
+            [(ind_id, ind_name, ZIP_CODE_REGION) for ind_id, ind_name in TARGET_INDUSTRIES]
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        def _fetch_with_zip(args):
+            ind_id, ind_name, zip_code = args
+            return ind_name, zip_code, _fetch_industry(ind_id, ind_name, api_key, zip_code=zip_code)
+
+        futures = {pool.submit(_fetch_with_zip, t): t for t in tasks}
+        counts: dict[str, int] = {}
         for future in as_completed(futures):
-            ind_name = futures[future]
             try:
-                offers = future.result()
+                ind_name, zip_code, offers = future.result()
                 added = 0
                 for o in offers:
                     if o["id"] not in seen_ids:
                         seen_ids.add(o["id"])
                         all_offers.append(o)
                         added += 1
-                print(f"  {ind_name}: {added} offers", file=sys.stderr)
+                counts[ind_name] = counts.get(ind_name, 0) + added
             except Exception as e:
-                print(f"  {ind_name}: error — {e}", file=sys.stderr)
+                t = futures[future]
+                print(f"  {t[1]} ({t[2]}): error — {e}", file=sys.stderr)
+
+    for ind_name, cnt in sorted(counts.items()):
+        print(f"  {ind_name}: {cnt} offers", file=sys.stderr)
 
     all_offers.sort(key=lambda o: (o["industry"], o["retailer"], o["title"]))
     print(f"  Total: {len(all_offers)} offers, {len(leaflets)} leaflets", file=sys.stderr)
