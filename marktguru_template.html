@@ -540,7 +540,38 @@ const NON_FOOD_IND = new Set([
 const FOOD_IND = new Set([
   "Supermarkt","Discounter","Getränkemarkt","Essen & Genießen"
 ]);
-// For mixed industries (Drogerie, Zoo & Garten): only classify as Food if title contains food keywords
+
+const NON_FOOD_KW = [
+  "batterie","batterien","akku","steckdose","steckdosenleiste","verlängerungskabel",
+  "tischleuchte","stehlampe","glühbirne","leuchtmittel","led","lampe","leuchte",
+  "fernseher","tablet","smartphone","handy","laptop","computer","drucker","kopfhörer",
+  "lautsprecher","kamera","mikrowelle","waschmaschine","trockner","spülmaschine",
+  "staubsauger","bügeleisen","toaster","wasserkocher","kaffeemaschine","mixer","heizlüfter",
+  "ventilator","klimaanlage","werkzeug","bohrer","säge","hammer","schrauben",
+  "farbe","pinsel","tapete","kleber","silikon","dichtung",
+  "windel","windeln","baby","pampers","feuchttücher","wattepads",
+  "shampoo","duschgel","seife","zahnbürste","zahnpasta","rasierer","deodorant",
+  "parfüm","creme","lotion","sonnencreme","lippenstift","mascara","make-up",
+  "waschmittel","weichspüler","spülmittel","reiniger","putzmittel","schwamm",
+  "mülltüten","müllsäcke","alufolie","frischhaltefolie","backpapier",
+  "toilettenpapier","taschentücher","küchenpapier","papiertücher",
+  "kleidung","hose","jacke","shirt","pullover","socken","unterwäsche","schuhe",
+  "spielzeug","fahrrad","roller","helm","fitness","hantel","yogamatte",
+  "tierfutter","katzenfutter","hundefutter","tiernahrung","streu",
+  "pflanzerde","blumenerde","dünger","pflanztopf","gartenschlauch",
+  "matratze","kissen","bettwäsche","handtuch","vorhang","teppich","möbel",
+  "regal","schrank","stuhl","sofa","schreibtisch"
+];
+// Compound-word substrings (German words glued together): checked via includes()
+const NON_FOOD_COMPOUND = [
+  "steckdose","leuchte","lampe","akku","batterie","kabel","schalter",
+  "shampoo","duschgel","zahnbürste","zahnpasta","waschmittel","spülmittel","putzmittel",
+  "windel","babyboy","babybody","feuchttuch","wattestäbchen",
+  "toilettenpapier","küchenpapier","taschentuch",
+  "kaffeemaschine","wasserkocher","staubsauger","bügeleisen","mikrowelle",
+  "kopfhörer","lautsprecher","fernseher","smartphone","tablet","laptop"
+];
+
 const FOOD_KW = ["obst","gemüse","fleisch","wurst","käse","joghurt","butter","eier",
   "brot","brötchen","mehl","zucker","speisesalz","speiseöl","olivenöl","rapsöl","essig",
   "sauce","soße","nudeln","pasta","reis","konserve","tiefkühl","gefroren",
@@ -553,12 +584,20 @@ const FOOD_KW = ["obst","gemüse","fleisch","wurst","käse","joghurt","butter","
   "knoblauch","kartoffel","avocado","banane","apfel","birne","orange","zitrone",
   "erdbeere","weintraube","tofu","veggie","vegan","lebensmittel","nahrungsmittel"];
 
+function kwMatch(hay, list) {
+  return list.some(k => new RegExp("(^|[\\s,;/(\\-])" + k + "($|[\\s,;/)\\-])").test(hay));
+}
+
 function isFood(o) {
-  if (FOOD_IND.has(o.industry)) return true;
   if (NON_FOOD_IND.has(o.industry)) return false;
-  // Mixed industries: only Food if title/description clearly contains a food keyword (word-boundary match)
   const hay = (o.title + " " + (o.description||"")).toLowerCase();
-  return FOOD_KW.some(k => new RegExp("(^|[\\s,;/(\\-])" + k + "($|[\\s,;/)\\-])").test(hay));
+  // Check compound substrings first (e.g. "Akkusteckdosenleiste")
+  if (NON_FOOD_COMPOUND.some(k => hay.includes(k))) return false;
+  // Check word-boundary non-food keywords
+  if (kwMatch(hay, NON_FOOD_KW)) return false;
+  if (FOOD_IND.has(o.industry)) return true;
+  // Mixed industries: only Food if a food keyword matches
+  return kwMatch(hay, FOOD_KW);
 }
 
 const IND_CSS = {
