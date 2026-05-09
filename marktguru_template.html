@@ -139,6 +139,21 @@
     }
     .tab.active .badge { background: var(--primary-light); color: var(--primary); }
 
+    /* ── View switcher (Angebote / Prospekte) ── */
+    #view-switcher {
+      display: flex; gap: 0;
+      background: rgba(0,0,0,0.18); border-radius: 10px;
+      padding: 3px; flex-shrink: 0;
+    }
+    .view-btn {
+      padding: 5px 14px; border: none; border-radius: 8px;
+      font-size: 0.8rem; font-weight: 700; cursor: pointer;
+      background: transparent; color: rgba(255,255,255,0.75);
+      transition: all 0.15s; white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .view-btn.active { background: #fff; color: var(--primary); }
+
     /* ── Food/Non-Food filter ── */
     #fn-bar {
       background: var(--surface);
@@ -454,6 +469,10 @@
       <div class="dot" id="dot"></div>
       <span id="status-txt"></span>
     </div>
+    <div id="view-switcher">
+      <button class="view-btn active" data-view="angebote" onclick="setView(this)">Angebote</button>
+      <button class="view-btn"        data-view="prospekte" onclick="setView(this)">Prospekte</button>
+    </div>
     <button id="settings-btn" onclick="openSettings()" title="Einstellungen">⚙️</button>
   </div>
   <div class="nav-search">
@@ -505,7 +524,8 @@ let activeSort     = "default";
 let activeRetailer = "";
 let searchQuery    = "";
 let activeKW       = "alle";
-let activeFN       = "alle";   // "alle" | "food" | "non-food"
+let activeFN       = "alle";
+let activeView     = "angebote";  // "angebote" | "prospekte"
 let favourites     = new Set(JSON.parse(localStorage.getItem("fav_retailers") || "[]"));
 
 const IND_ORDER = [
@@ -758,18 +778,23 @@ function populateRetailerSelect() {
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function render() {
-  const offers   = filtered();
-  const leaflets = filteredLeaflets();
+  if (activeView === "prospekte") {
+    renderProspekte();
+  } else {
+    renderAngebote();
+  }
+}
 
+function renderProspekte() {
+  const leaflets = filteredLeaflets();
   document.getElementById("results-info").textContent =
-    `${offers.length.toLocaleString("de")} von ${allOffers.length.toLocaleString("de")} Angeboten`;
+    `${leaflets.length} Prospekte`;
 
   let html = "";
-
-  // Leaflets (hide during search)
-  if (!searchQuery && leaflets.length > 0) {
-    html += `<div class="section-title">Prospekte <span class="cnt">${leaflets.length}</span></div>
-    <div id="leaflets-grid">`;
+  if (leaflets.length === 0) {
+    html = `<div class="empty-state"><div class="icon">📋</div>Keine Prospekte gefunden.</div>`;
+  } else {
+    html += `<div id="leaflets-grid" style="margin-top:14px">`;
     for (const l of leaflets) {
       const favMark = favourites.has(l.retailer) ? `<span class="fav-star">★</span>` : "";
       html += `<a class="leaflet-card" href="${esc(l.url)}" target="_blank" rel="noopener">
@@ -786,8 +811,16 @@ function render() {
     }
     html += `</div>`;
   }
+  document.getElementById("content").innerHTML = html;
+}
 
-  // Products
+function renderAngebote() {
+  const offers = filtered();
+
+  document.getElementById("results-info").textContent =
+    `${offers.length.toLocaleString("de")} von ${allOffers.length.toLocaleString("de")} Angeboten`;
+
+  let html = "";
   if (offers.length === 0) {
     const hint = favourites.size > 0 ? `<div style="font-size:.82rem;margin-top:8px;color:var(--muted)">Tipp: Märkte in ⚙️ Einstellungen als Favorit markieren</div>` : "";
     html += `<div class="empty-state">
@@ -834,7 +867,6 @@ function render() {
     }
     html += `</div>`;
   }
-
   document.getElementById("content").innerHTML = html;
 }
 
@@ -886,6 +918,16 @@ function toggleFav(retailer) {
 // ── Setters ───────────────────────────────────────────────────────────────────
 function setTab(t) { activeTab = t; activeRetailer = ""; populateRetailerSelect(); renderToolbar(); render(); }
 function setKW(key) { activeKW = key; renderKWBar(); render(); }
+function setView(btn) {
+  document.querySelectorAll(".view-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  activeView = btn.dataset.view;
+  const isAngebote = activeView === "angebote";
+  document.getElementById("toolbar").style.display = isAngebote ? "" : "none";
+  document.getElementById("fn-bar").style.display  = isAngebote ? "" : "none";
+  document.getElementById("controls").style.display = isAngebote ? "flex" : "none";
+  render();
+}
 function setFN(btn) {
   document.querySelectorAll(".fn-btn").forEach(b => b.classList.remove("active"));
   btn.classList.add("active"); activeFN = btn.dataset.fn; render();
