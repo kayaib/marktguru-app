@@ -139,6 +139,29 @@
     }
     .tab.active .badge { background: var(--primary-light); color: var(--primary); }
 
+    /* ── Food/Non-Food filter ── */
+    #fn-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 14px;
+    }
+    #fn-bar span {
+      font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; color: var(--muted); margin-right: 2px;
+    }
+    .fn-btn {
+      padding: 5px 14px; border-radius: 20px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      font-size: 0.77rem; font-weight: 600; color: var(--text-2);
+      cursor: pointer; white-space: nowrap;
+      transition: all 0.12s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fn-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .fn-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
     /* ── KW filter ── */
     #kw-bar {
       background: var(--bg);
@@ -452,6 +475,12 @@
 </div>
 
 <div id="toolbar"></div>
+<div id="fn-bar">
+  <span>Kategorie:</span>
+  <button class="fn-btn active" data-fn="alle"     onclick="setFN(this)">Alle</button>
+  <button class="fn-btn"        data-fn="food"     onclick="setFN(this)">🥦 Food</button>
+  <button class="fn-btn"        data-fn="non-food" onclick="setFN(this)">🧴 Non-Food</button>
+</div>
 <div id="kw-bar" style="display:none"></div>
 
 <div id="controls" style="display:none">
@@ -476,6 +505,7 @@ let activeSort     = "default";
 let activeRetailer = "";
 let searchQuery    = "";
 let activeKW       = "alle";
+let activeFN       = "alle";   // "alle" | "food" | "non-food"
 let favourites     = new Set(JSON.parse(localStorage.getItem("fav_retailers") || "[]"));
 
 const IND_ORDER = [
@@ -483,6 +513,27 @@ const IND_ORDER = [
   "Elektromarkt","Mode & Schuh","Sport & Outdoor","Zoo & Garten",
   "Getränkemarkt","Möbelhaus","Essen & Genießen"
 ];
+
+const NON_FOOD_IND = new Set([
+  "Baumarkt","Elektromarkt","Mode & Schuh","Sport & Outdoor","Möbelhaus"
+]);
+const FOOD_IND = new Set([
+  "Supermarkt","Discounter","Getränkemarkt","Essen & Genießen"
+]);
+// "Drogerie & Gesundheit" and "Zoo & Garten" are mixed — classified per category
+const NON_FOOD_CAT_KW = ["reinigung","haushalt","körperpflege","hygiene","pflege","waschmittel",
+  "putzmittel","kosmetik","dusche","shampoo","zahnpflege","windeln","papier","toilettenpapier",
+  "taschentücher","küchenpapier","tierfutter","heimtier","garten","werkzeug","baumarkt",
+  "kleidung","textil","schuhe","elektro","technik","spielzeug","möbel","deko"];
+
+function isFood(o) {
+  if (FOOD_IND.has(o.industry)) return true;
+  if (NON_FOOD_IND.has(o.industry)) return false;
+  // Mixed industries: check title/category keywords
+  const hay = (o.title + " " + (o.category||"") + " " + (o.description||"")).toLowerCase();
+  if (NON_FOOD_CAT_KW.some(k => hay.includes(k))) return false;
+  return true;  // default: treat as food in mixed industries
+}
 
 const IND_CSS = {
   "Supermarkt":          "ind-Supermarkt",
@@ -617,6 +668,11 @@ function filtered() {
   if (activeTab !== "Alle")
     list = list.filter(o => o.industry === activeTab);
 
+  if (activeFN === "food")
+    list = list.filter(o => isFood(o));
+  else if (activeFN === "non-food")
+    list = list.filter(o => !isFood(o));
+
   if (activeRetailer)
     list = list.filter(o => o.retailer === activeRetailer);
 
@@ -657,6 +713,10 @@ function filtered() {
 
 function filteredLeaflets() {
   let list = activeTab === "Alle" ? allLeaflets : allLeaflets.filter(l => l.industry === activeTab);
+  if (activeFN === "food")
+    list = list.filter(l => FOOD_IND.has(l.industry) || (!NON_FOOD_IND.has(l.industry)));
+  else if (activeFN === "non-food")
+    list = list.filter(l => NON_FOOD_IND.has(l.industry));
   if (favourites.size > 0)
     list = list.filter(l => favourites.has(l.retailer));
   if (activeKW !== "alle")
@@ -826,6 +886,10 @@ function toggleFav(retailer) {
 // ── Setters ───────────────────────────────────────────────────────────────────
 function setTab(t) { activeTab = t; activeRetailer = ""; populateRetailerSelect(); renderToolbar(); render(); }
 function setKW(key) { activeKW = key; renderKWBar(); render(); }
+function setFN(btn) {
+  document.querySelectorAll(".fn-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active"); activeFN = btn.dataset.fn; render();
+}
 function setSort(btn) {
   document.querySelectorAll(".sort-btn").forEach(b=>b.classList.remove("active"));
   btn.classList.add("active"); activeSort = btn.dataset.sort; render();
