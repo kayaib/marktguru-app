@@ -540,19 +540,25 @@ const NON_FOOD_IND = new Set([
 const FOOD_IND = new Set([
   "Supermarkt","Discounter","Getränkemarkt","Essen & Genießen"
 ]);
-// "Drogerie & Gesundheit" and "Zoo & Garten" are mixed — classified per category
-const NON_FOOD_CAT_KW = ["reinigung","haushalt","körperpflege","hygiene","pflege","waschmittel",
-  "putzmittel","kosmetik","dusche","shampoo","zahnpflege","windeln","papier","toilettenpapier",
-  "taschentücher","küchenpapier","tierfutter","heimtier","garten","werkzeug","baumarkt",
-  "kleidung","textil","schuhe","elektro","technik","spielzeug","möbel","deko"];
+// For mixed industries (Drogerie, Zoo & Garten): only classify as Food if title contains food keywords
+const FOOD_KW = ["obst","gemüse","fleisch","wurst","käse","joghurt","butter","eier",
+  "brot","brötchen","mehl","zucker","speisesalz","speiseöl","olivenöl","rapsöl","essig",
+  "sauce","soße","nudeln","pasta","reis","konserve","tiefkühl","gefroren",
+  "fisch","meeresfrüchte","geflügel","hühnchen","rindfleisch","schweinefleisch",
+  "aufschnitt","schinken","salami","chips","keks","kuchen","torte",
+  "speiseeis","schokolade","bonbon","süßigkeit","marmelade","honig","nüsse","müsli",
+  "cornflakes","cerealien","kaffee","tee","kakao","fruchtsaft","smoothie","mineralwasser",
+  "limonade","softdrink","bier","wein","sekt","spirituose","gewürz","dressing",
+  "mayonnaise","senf","ketchup","tomate","paprika","gurke","karotte","zwiebel",
+  "knoblauch","kartoffel","avocado","banane","apfel","birne","orange","zitrone",
+  "erdbeere","weintraube","tofu","veggie","vegan","lebensmittel","nahrungsmittel"];
 
 function isFood(o) {
   if (FOOD_IND.has(o.industry)) return true;
   if (NON_FOOD_IND.has(o.industry)) return false;
-  // Mixed industries: check title/category keywords
-  const hay = (o.title + " " + (o.category||"") + " " + (o.description||"")).toLowerCase();
-  if (NON_FOOD_CAT_KW.some(k => hay.includes(k))) return false;
-  return true;  // default: treat as food in mixed industries
+  // Mixed industries: only Food if title/description clearly contains a food keyword (word-boundary match)
+  const hay = (o.title + " " + (o.description||"")).toLowerCase();
+  return FOOD_KW.some(k => new RegExp("(^|[\\s,;/(\\-])" + k + "($|[\\s,;/)\\-])").test(hay));
 }
 
 const IND_CSS = {
