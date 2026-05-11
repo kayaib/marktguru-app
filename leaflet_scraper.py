@@ -26,8 +26,8 @@ CACHE_FILE  = Path(__file__).parent / "leaflet_offers_cache.json"
 IMAGES_DIR  = Path(__file__).parent / "docs" / "images"
 CDN_HOST    = "mg2de.b-cdn.net"
 
-# Scrape leaflets where marktguru has fewer than this many indexed offers
-_SCRAPE_THRESHOLD = 50
+# Scrape all leaflets regardless of how many offers marktguru has indexed
+_SCRAPE_THRESHOLD = float("inf")
 
 AICORE_AUTH_URL      = "https://retail-ai-g1f2q3e8.authentication.eu10.hana.ondemand.com"
 AICORE_API_URL       = "https://api.ai.prod.eu-central-1.aws.ml.hana.ondemand.com"
