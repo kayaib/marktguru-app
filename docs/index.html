@@ -803,6 +803,17 @@ function fmtValidity(from, until) {
   return f || u;
 }
 
+function buildDesc(o) {
+  const raw = (o.description || "").trim();
+  if (raw && raw !== "Details im Prospekt") return raw;
+  const parts = [];
+  if (o.brand)          parts.push(o.brand);
+  if (o.price_per_unit) parts.push(o.price_per_unit);
+  if (o.discount_pct)   parts.push(`${o.discount_pct} % Rabatt`);
+  if (o.original_price) parts.push(`statt ${o.original_price}`);
+  return parts.join(" · ");
+}
+
 // ── KW helpers ────────────────────────────────────────────────────────────────
 function parseDate(dmy) {
   if (!dmy) return null;
@@ -1179,8 +1190,7 @@ function renderAngebote() {
                onerror="this.parentNode.innerHTML='<div class=no-img>🛒</div>'">`
         : `<div class="no-img">🛒</div>`;
       const brand = o.brand && o.brand !== "thisisnobrand123" ? `<div class="pc-brand">${esc(o.brand)}</div>` : "";
-      const desc  = o.description && o.description !== o.title
-        ? `<div class="pc-desc">${esc(o.description)}</div>` : "";
+      const desc  = buildDesc(o) ? `<div class="pc-desc">${esc(buildDesc(o))}</div>` : "";
       const unit  = o.price_per_unit ? `<div class="pc-unit">${esc(o.price_per_unit)}</div>` : "";
       const orig  = o.original_price ? `<span class="pc-orig">${esc(o.original_price)}</span>` : "";
       const favMark = favourites.has(o.retailer) ? `<span class="fav-star">★</span>` : "";
@@ -1320,8 +1330,7 @@ function openDetail(id) {
   const orig = o.original_price
     ? `<span class="dp-orig">${esc(o.original_price)}</span>` : "";
   const brand = o.brand ? `<div class="dp-brand">${esc(o.brand)}</div>` : "";
-  const desc  = o.description && o.description !== o.title
-    ? `<div class="dp-desc">${esc(o.description)}</div>` : "";
+  const desc  = buildDesc(o) ? `<div class="dp-desc">${esc(buildDesc(o))}</div>` : "";
 
   function row(label, value) {
     if (!value) return "";
