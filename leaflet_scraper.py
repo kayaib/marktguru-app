@@ -2,11 +2,13 @@
 """
 Leaflet Vision Scraper — for retailers that marktguru has as prospekt-only (low offerCount).
 Downloads page images from marktguru CDN (or prospektmaschine.de for dm) and extracts
-offers via gpt-4o Vision (AI Core).
+offers via gpt-4o Vision (AI Core).  Product images are cropped from the page using
+bounding boxes returned by the vision model and saved to docs/images/.
 Results cached in leaflet_offers_cache.json.
 """
 
 import base64
+import io
 import json
 import os
 import re
@@ -17,10 +19,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from bs4 import BeautifulSoup
+from PIL import Image
 import requests
 
-CACHE_FILE = Path(__file__).parent / "leaflet_offers_cache.json"
-CDN_HOST   = "mg2de.b-cdn.net"
+CACHE_FILE  = Path(__file__).parent / "leaflet_offers_cache.json"
+IMAGES_DIR  = Path(__file__).parent / "docs" / "images"
+CDN_HOST    = "mg2de.b-cdn.net"
 
 # Scrape leaflets where marktguru has fewer than this many indexed offers
 _SCRAPE_THRESHOLD = 50
@@ -68,6 +72,8 @@ def _page_url(leaflet_id: str, page: int) -> str:
     return f"https://{CDN_HOST}/api/v1/leaflets/{leaflet_id}/images/pages/{page}/medium.webp"
 
 
+# ── prospektmaschine.de (dm source) ─────────────────────────────────────────
+
 def _fetch_pm_leaflets() -> list[dict]:
     """Fetch dm leaflets from prospektmaschine.de (dm is absent from marktguru)."""
     url = "https://www.prospektmaschine.de/dm-drogerie/"
@@ -85,7 +91,6 @@ def _fetch_pm_leaflets() -> list[dict]:
         bid = card.get("data-brochure-id", "")
         if not bid or bid in seen_ids:
             continue
-        # Only dm leaflets (skip Müller, Budni etc. that appear on the same page)
         shop_name = card.select_one(".shop-name")
         if shop_name and "dm" not in shop_name.get_text().lower():
             continue
@@ -106,12 +111,11 @@ def _fetch_pm_leaflets() -> list[dict]:
             "_pm_brochure_id": bid,
             "_pm_detail_url": link["href"] if link else "",
         })
-    # Take only the first (most current) dm leaflet to avoid scraping duplicates
     return leaflets[:1]
 
 
 def _fetch_pm_page_images(brochure_id: str, detail_url: str) -> list[str]:
-    """Fetch signed page image URLs from a prospektmaschine brochure detail page."""
+    """Return signed page image URLs from a prospektmaschine brochure detail page."""
     if not detail_url.startswith("http"):
         detail_url = "https://www.prospektmaschine.de" + detail_url
     try:
@@ -121,35 +125,20 @@ def _fetch_pm_page_images(brochure_id: str, detail_url: str) -> list[str]:
         print(f"  prospektmaschine detail fetch failed: {e}", file=sys.stderr)
         return []
 
-    # maxPages is embedded in the JS
     m_pages = re.search(r"var maxPages\s*=\s*(\d+)", r.text)
     max_pages = int(m_pages.group(1)) if m_pages else 0
     if max_pages == 0:
         return []
 
-    # Extract one signed URL for page 0, then derive URLs for all pages
-    # The signed hash covers the full path, so we need the detail page to give us each URL.
-    # Approach: collect all unique page image URLs from the HTML (page 0 is always there),
-    # then for remaining pages use the AJAX endpoint pattern discovered in the page.
-    #
-    # Simpler: prospektmaschine embeds page-0 image as <img src=".../{page}.jpg?t=...">
-    # We fetch each page's image URL via the detail page URL + ?page=N
     imgs = []
-    # Page 0 image is directly in the HTML
     img_matches = re.findall(
         r'https://eu\.leafletscdn\.com/thumbor/[^"\']+/de/data/\d+/' + brochure_id + r'/0\.jpg[^"\']*',
         r.text
     )
-    # Use the largest variant (640x640)
-    p0_url = ""
-    for u in img_matches:
-        if "640x640" in u or (not p0_url):
-            p0_url = u
+    p0_url = next((u for u in img_matches if "640x640" in u), img_matches[0] if img_matches else "")
     if not p0_url:
         return []
 
-    # For pages 1..N we can fetch the brochure page with ?page=N — prospektmaschine
-    # renders the signed URL server-side for each page.
     imgs.append(p0_url)
     for page in range(1, max_pages):
         try:
@@ -158,10 +147,7 @@ def _fetch_pm_page_images(brochure_id: str, detail_url: str) -> list[str]:
                 r'https://eu\.leafletscdn\.com/thumbor/[^"\']+/de/data/\d+/' + brochure_id + r'/' + str(page) + r'\.jpg[^"\']*',
                 rp.text
             )
-            page_url = ""
-            for u in matches:
-                if "640x640" in u or (not page_url):
-                    page_url = u
+            page_url = next((u for u in matches if "640x640" in u), matches[0] if matches else "")
             if page_url:
                 imgs.append(page_url)
         except Exception:
@@ -169,47 +155,57 @@ def _fetch_pm_page_images(brochure_id: str, detail_url: str) -> list[str]:
     return imgs
 
 
-def _fetch_pm_page_b64(url: str) -> str | None:
-    """Download a prospektmaschine page image and return as base64."""
+# ── image fetching ────────────────────────────────────────────────────────────
+
+def _fetch_page_bytes(url: str) -> bytes | None:
+    """Download a page image, return raw bytes."""
     try:
         r = requests.get(url, headers=HEADERS, timeout=25)
-        if r.status_code != 200:
-            return None
-        return base64.b64encode(r.content).decode()
+        return r.content if r.status_code == 200 else None
     except Exception:
         return None
 
 
-def _count_pages(leaflet_id: str) -> int:
-    """Count available pages by binary search."""
-    # Check page 0 first
-    r = requests.head(_page_url(leaflet_id, 0), headers=HEADERS, timeout=10)
-    if r.status_code != 200:
-        return 0
-    # Binary search up to 80 pages
-    lo, hi = 1, 80
-    while lo < hi:
-        mid = (lo + hi + 1) // 2
-        r = requests.head(_page_url(leaflet_id, mid), headers=HEADERS, timeout=10)
-        if r.status_code == 200:
-            lo = mid
-        else:
-            hi = mid - 1
-    return lo + 1
+def _fetch_mg_page_bytes(leaflet_id: str, page: int) -> bytes | None:
+    return _fetch_page_bytes(_page_url(leaflet_id, page))
 
 
-def _fetch_page_b64(leaflet_id: str, page: int) -> str | None:
-    """Fetch a page image and return as base64."""
-    url = _page_url(leaflet_id, page)
-    r = requests.get(url, headers=HEADERS, timeout=20)
-    if r.status_code != 200:
-        return None
-    return base64.b64encode(r.content).decode()
+# ── crop helper ───────────────────────────────────────────────────────────────
+
+def _crop_and_save(img_bytes: bytes, bbox: list, offer_id: str) -> str:
+    """
+    Crop a product image from a page using bbox [x1,y1,x2,y2] (0-100 percentages).
+    Saves to docs/images/{offer_id}.jpg (120×120 px). Returns relative path.
+    """
+    try:
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        w, h = img.size
+        x1 = max(0, int(bbox[0] / 100 * w))
+        y1 = max(0, int(bbox[1] / 100 * h))
+        x2 = min(w, int(bbox[2] / 100 * w))
+        y2 = min(h, int(bbox[3] / 100 * h))
+        if x2 <= x1 or y2 <= y1:
+            return ""
+        crop = img.crop((x1, y1, x2, y2)).resize((120, 120), Image.LANCZOS)
+        IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+        safe_id = re.sub(r"[^a-z0-9_]", "_", offer_id)[:60]
+        out_path = IMAGES_DIR / f"{safe_id}.jpg"
+        crop.save(out_path, "JPEG", quality=80)
+        return f"images/{safe_id}.jpg"
+    except Exception as e:
+        print(f"    crop error for {offer_id}: {e}", file=sys.stderr)
+        return ""
 
 
-def _analyze_page(b64_image: str, retailer: str, token: str) -> list[dict]:
-    """Send one page to gpt-4o Vision and extract offers."""
+# ── vision analysis ───────────────────────────────────────────────────────────
+
+def _analyze_page(img_bytes: bytes, retailer: str, token: str) -> list[dict]:
+    """Send one page to gpt-4o Vision and extract offers with bounding boxes."""
     url = f"{AICORE_API_URL}/v2/inference/deployments/{AICORE_DEPLOYMENT_ID}/v1/chat/completions"
+
+    # Detect image format from magic bytes
+    mime = "image/webp" if img_bytes[:4] == b"RIFF" or img_bytes[8:12] == b"WEBP" else "image/jpeg"
+    b64 = base64.b64encode(img_bytes).decode()
 
     prompt = """Extract ALL product offers visible on this supermarket/retailer flyer page.
 For each offer return a JSON object with these fields:
@@ -222,6 +218,7 @@ For each offer return a JSON object with these fields:
 - valid_from: validity start date as DD.MM.YYYY if shown, else ""
 - valid_until: validity end date as DD.MM.YYYY if shown, else ""
 - description: short description or weight/quantity if shown, else ""
+- bbox: bounding box of the product IMAGE (not text) as [x1, y1, x2, y2] percentages 0-100 of page size. null if no product image visible.
 
 Return ONLY a JSON array. If no offers are visible, return [].
 Do not include non-product content (logos, decorations, store info)."""
@@ -233,13 +230,13 @@ Do not include non-product content (logos, decorations, store info)."""
             "content": [
                 {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {
-                    "url": f"data:image/webp;base64,{b64_image}",
+                    "url": f"data:{mime};base64,{b64}",
                     "detail": "high"
                 }}
             ]
         }],
         "temperature": 0,
-        "max_tokens": 2000,
+        "max_tokens": 3000,
     }
 
     r = requests.post(
@@ -254,8 +251,6 @@ Do not include non-product content (logos, decorations, store info)."""
     )
     r.raise_for_status()
     content = r.json()["choices"][0]["message"]["content"].strip()
-
-    # Extract JSON array
     start = content.find("[")
     end   = content.rfind("]") + 1
     if start == -1:
@@ -263,79 +258,102 @@ Do not include non-product content (logos, decorations, store info)."""
     return json.loads(content[start:end])
 
 
+# ── date helper ───────────────────────────────────────────────────────────────
+
 def _fix_date(date_str: str, leaflet_date: str) -> str:
-    """Fix vision-OCR date errors: wrong year → use leaflet year; empty → use leaflet date."""
+    """Fix vision-OCR date errors: wrong year → current year; empty → leaflet date."""
     if not date_str:
         return leaflet_date
     m = re.match(r"(\d{2})\.(\d{2})\.(\d{4})", date_str)
     if not m:
         return leaflet_date
     day, month, year = m.group(1), m.group(2), int(m.group(3))
-    # Correct implausible years (OCR misread, e.g. 2020 instead of 2026)
     if year < 2024:
-        ref_year = datetime.now(timezone.utc).year
-        date_str = f"{day}.{month}.{ref_year}"
+        date_str = f"{day}.{month}.{datetime.now(timezone.utc).year}"
     return date_str
 
 
+# ── scraping ──────────────────────────────────────────────────────────────────
 
-    """Scrape all pages of one leaflet, return list of offers."""
+def _build_offer(o: dict, offer_id: str, retailer: str,
+                 valid_from: str, valid_until: str,
+                 img_bytes: bytes | None) -> dict:
+    """Convert a raw vision offer dict to the standard offer schema."""
+    image_url = ""
+    if img_bytes and o.get("bbox"):
+        bbox = o["bbox"]
+        if isinstance(bbox, list) and len(bbox) == 4:
+            image_url = _crop_and_save(img_bytes, bbox, offer_id)
+    return {
+        "id":             offer_id,
+        "title":          o.get("title", "").strip(),
+        "description":    o.get("description") or "",
+        "brand":          o.get("brand") or "",
+        "retailer":       retailer,
+        "retailer_id":    "",
+        "industry":       "",  # set by combined_crawler
+        "category":       "",
+        "price":          o.get("price") or "",
+        "price_value":    float(o.get("price_value") or 0),
+        "original_price": o.get("original_price") or "",
+        "price_per_unit": "",
+        "discount_pct":   o.get("discount_pct"),
+        "valid_from":     _fix_date(o.get("valid_from", ""), valid_from),
+        "valid_until":    _fix_date(o.get("valid_until", ""), valid_until),
+        "image_url":      image_url,
+        "has_image":      bool(image_url),
+        "source":         "vision",
+    }
+
+
+def _scrape_leaflet(leaflet_id: str, retailer: str,
+                    valid_from: str, valid_until: str) -> list[dict]:
+    """Scrape all pages of one marktguru leaflet, return list of offers."""
     if not AICORE_CLIENT_ID or not AICORE_CLIENT_SECRET or not AICORE_DEPLOYMENT_ID:
         return []
 
     token = _get_token()
-    page_count = _count_pages(leaflet_id)
-    if page_count == 0:
+
+    # Count pages via binary search on CDN
+    r0 = requests.head(_page_url(leaflet_id, 0), headers=HEADERS, timeout=10)
+    if r0.status_code != 200:
         return []
+    lo, hi = 1, 80
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        r = requests.head(_page_url(leaflet_id, mid), headers=HEADERS, timeout=10)
+        lo = mid if r.status_code == 200 else (hi := mid - 1) or lo
+    page_count = lo + 1
 
     print(f"    Scraping {retailer} leaflet {leaflet_id} ({page_count} pages)…", file=sys.stderr)
 
-    all_offers = []
-    seen_titles: set[str] = set()
-
-    # Fetch pages in parallel (max 4 at a time to avoid rate limits)
+    # Fetch page images in parallel
     with ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {pool.submit(_fetch_page_b64, leaflet_id, p): p for p in range(page_count)}
-        page_images = {}
+        futures = {pool.submit(_fetch_mg_page_bytes, leaflet_id, p): p for p in range(page_count)}
+        page_images: dict[int, bytes] = {}
         for future in as_completed(futures):
             page = futures[future]
-            b64 = future.result()
-            if b64:
-                page_images[page] = b64
+            b = future.result()
+            if b:
+                page_images[page] = b
 
-    # Analyze pages sequentially (vision API calls)
+    all_offers: list[dict] = []
+    seen_titles: set[str] = set()
     for page in sorted(page_images.keys()):
         try:
-            offers = _analyze_page(page_images[page], retailer, token)
-            for o in offers:
+            raw_offers = _analyze_page(page_images[page], retailer, token)
+            for o in raw_offers:
                 title = o.get("title", "").strip()
                 if not title or title.lower() in seen_titles:
                     continue
                 seen_titles.add(title.lower())
-                all_offers.append({
-                    "id": f"vis_{leaflet_id}_{re.sub(r'[^a-z0-9]', '_', title.lower())[:40]}",
-                    "title": title,
-                    "description": o.get("description") or "",
-                    "brand": o.get("brand") or "",
-                    "retailer": retailer,
-                    "retailer_id": "",
-                    "industry": "",  # will be set by combined_crawler
-                    "category": "",
-                    "price": o.get("price") or "",
-                    "price_value": float(o.get("price_value") or 0),
-                    "original_price": o.get("original_price") or "",
-                    "price_per_unit": "",
-                    "discount_pct": o.get("discount_pct"),
-                    "valid_from": _fix_date(o.get("valid_from", ""), valid_from),
-                    "valid_until": _fix_date(o.get("valid_until", ""), valid_until),
-                    "image_url": "",
-                    "has_image": False,
-                    "source": "vision",
-                })
+                oid = f"vis_{leaflet_id}_{re.sub(r'[^a-z0-9]', '_', title.lower())[:40]}"
+                all_offers.append(_build_offer(o, oid, retailer, valid_from, valid_until, page_images[page]))
         except Exception as e:
             print(f"    Page {page} error: {e}", file=sys.stderr)
 
-    print(f"    {retailer}: extracted {len(all_offers)} offers", file=sys.stderr)
+    print(f"    {retailer}: extracted {len(all_offers)} offers "
+          f"({sum(1 for o in all_offers if o['has_image'])} with images)", file=sys.stderr)
     return all_offers
 
 
@@ -354,52 +372,36 @@ def _scrape_pm_leaflet(brochure_id: str, detail_url: str, retailer: str,
     print(f"    Scraping {retailer} (prospektmaschine {brochure_id}, {len(page_urls)} pages)…",
           file=sys.stderr)
 
-    # Fetch page images in parallel
     with ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {pool.submit(_fetch_pm_page_b64, url): i for i, url in enumerate(page_urls)}
-        page_images: dict[int, str] = {}
+        futures = {pool.submit(_fetch_page_bytes, url): i for i, url in enumerate(page_urls)}
+        page_images: dict[int, bytes] = {}
         for future in as_completed(futures):
             page = futures[future]
-            b64 = future.result()
-            if b64:
-                page_images[page] = b64
+            b = future.result()
+            if b:
+                page_images[page] = b
 
     all_offers: list[dict] = []
     seen_titles: set[str] = set()
     for page in sorted(page_images.keys()):
         try:
-            offers = _analyze_page(page_images[page], retailer, token)
-            for o in offers:
+            raw_offers = _analyze_page(page_images[page], retailer, token)
+            for o in raw_offers:
                 title = o.get("title", "").strip()
                 if not title or title.lower() in seen_titles:
                     continue
                 seen_titles.add(title.lower())
-                all_offers.append({
-                    "id": f"vis_pm{brochure_id}_{re.sub(r'[^a-z0-9]', '_', title.lower())[:40]}",
-                    "title": title,
-                    "description": o.get("description") or "",
-                    "brand": o.get("brand") or "",
-                    "retailer": retailer,
-                    "retailer_id": "",
-                    "industry": "",
-                    "category": "",
-                    "price": o.get("price") or "",
-                    "price_value": float(o.get("price_value") or 0),
-                    "original_price": o.get("original_price") or "",
-                    "price_per_unit": "",
-                    "discount_pct": o.get("discount_pct"),
-                    "valid_from": _fix_date(o.get("valid_from", ""), valid_from),
-                    "valid_until": _fix_date(o.get("valid_until", ""), valid_until),
-                    "image_url": "",
-                    "has_image": False,
-                    "source": "vision",
-                })
+                oid = f"vis_pm{brochure_id}_{re.sub(r'[^a-z0-9]', '_', title.lower())[:40]}"
+                all_offers.append(_build_offer(o, oid, retailer, valid_from, valid_until, page_images[page]))
         except Exception as e:
             print(f"    Page {page} error: {e}", file=sys.stderr)
 
-    print(f"    {retailer}: extracted {len(all_offers)} offers", file=sys.stderr)
+    print(f"    {retailer}: extracted {len(all_offers)} offers "
+          f"({sum(1 for o in all_offers if o['has_image'])} with images)", file=sys.stderr)
     return all_offers
 
+
+# ── main entry point ──────────────────────────────────────────────────────────
 
 def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
     """
@@ -411,7 +413,6 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
         print("  AI Core credentials not set — skipping vision scraping", file=sys.stderr)
         return []
 
-    # Load cache
     cache: dict = {}
     if CACHE_FILE.exists():
         try:
@@ -419,7 +420,6 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
         except Exception:
             cache = {}
 
-    # marktguru leaflets with low offer counts
     mg_to_scrape = [
         l for l in leaflets
         if l.get("retailer") in RELEVANT_RETAILERS
@@ -428,30 +428,26 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
         and str(l.get("leaflet_id", "")) not in cache
     ]
 
-    # dm leaflets from prospektmaschine.de (not present in marktguru)
-    pm_leaflets = []
+    pm_leaflets: list[dict] = []
     if "dm-drogerie markt" not in {l.get("retailer") for l in leaflets}:
         pm_leaflets = _fetch_pm_leaflets()
         pm_leaflets = [l for l in pm_leaflets if l["leaflet_id"] not in cache]
 
-    to_scrape_mg  = mg_to_scrape
     to_scrape_all = mg_to_scrape + pm_leaflets
 
     if to_scrape_all:
         print(f"  Vision scraping {len(to_scrape_all)} leaflets: "
               f"{[l['retailer'] for l in to_scrape_all]}", file=sys.stderr)
 
-    # Scrape marktguru-sourced leaflets
-    for l in to_scrape_mg:
+    for l in mg_to_scrape:
         lid = str(l["leaflet_id"])
         offers = _scrape_leaflet(lid, l["retailer"], l.get("valid_from", ""), l.get("valid_until", ""))
         cache[lid] = {
-            "retailer": l["retailer"],
+            "retailer":   l["retailer"],
             "scraped_at": datetime.now(timezone.utc).isoformat(),
-            "offers": offers,
+            "offers":     offers,
         }
 
-    # Scrape dm leaflets from prospektmaschine
     for l in pm_leaflets:
         lid = l["leaflet_id"]
         offers = _scrape_pm_leaflet(
@@ -459,9 +455,9 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
             l["retailer"], l.get("valid_from", ""), l.get("valid_until", "")
         )
         cache[lid] = {
-            "retailer": l["retailer"],
+            "retailer":   l["retailer"],
             "scraped_at": datetime.now(timezone.utc).isoformat(),
-            "offers": offers,
+            "offers":     offers,
         }
 
     if to_scrape_all:
@@ -471,24 +467,22 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
         n_relevant = len([l for l in leaflets if l.get("retailer") in RELEVANT_RETAILERS])
         print(f"  Vision scraping: all {n_relevant} relevant leaflets already cached", file=sys.stderr)
 
-    # Return all cached offers
-    all_offers = []
-    for lid, entry in cache.items():
+    all_offers: list[dict] = []
+    for entry in cache.values():
         all_offers.extend(entry.get("offers", []))
     return all_offers
 
 
 if __name__ == "__main__":
-    # Quick test with one leaflet
     test_leaflets = [{
         "leaflet_id": "5295412",
         "retailer": "Kaufland",
         "offer_count": 0,
-        "valid_from": "",
-        "valid_until": "",
+        "valid_from": "10.05.2026",
+        "valid_until": "13.05.2026",
     }]
     print("Testing vision scraper on Kaufland…")
     offers = scrape_missing_leaflets(test_leaflets)
-    print(f"\nExtracted {len(offers)} offers")
+    print(f"\nExtracted {len(offers)} offers ({sum(1 for o in offers if o['has_image'])} with images)")
     for o in offers[:10]:
-        print(f"  {o['price']:10} {o['title']}")
+        print(f"  {o['price']:10} {'[img]' if o['has_image'] else '     '} {o['title']}")

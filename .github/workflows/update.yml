@@ -20,7 +20,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4
+        run: pip install requests beautifulsoup4 pillow
 
       - name: Build index.html
         env:
@@ -33,7 +33,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/index.html classification_cache.json leaflet_offers_cache.json || true
+          git add docs/index.html docs/images/ classification_cache.json leaflet_offers_cache.json || true
           if git diff --cached --quiet; then
             echo "No changes."
           else
