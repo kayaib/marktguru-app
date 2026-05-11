@@ -1,16 +1,17 @@
-name: Update promotions
+name: Daily vision scrape
 
 on:
   schedule:
-    - cron: "17 * * * *"   # every hour at :17
+    - cron: "0 5 * * *"   # every day at 05:00 UTC (07:00 CEST)
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
 
     steps:
       - uses: actions/checkout@v4
@@ -22,18 +23,24 @@ jobs:
       - name: Install dependencies
         run: pip install requests beautifulsoup4 pillow
 
-      - name: Build index.html (API only, use cached vision data)
+      - name: Clear vision cache (force full re-scrape)
+        run: echo '{}' > leaflet_offers_cache.json
+
+      - name: Build index.html with full vision scraping
+        env:
+          AICORE_CLIENT_ID: ${{ secrets.AICORE_CLIENT_ID }}
+          AICORE_CLIENT_SECRET: ${{ secrets.AICORE_CLIENT_SECRET }}
+          AICORE_DEPLOYMENT_ID: ${{ secrets.AICORE_DEPLOYMENT_ID }}
         run: python build.py
 
       - name: Commit and push if changed
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/index.html docs/images/ || true
+          git add docs/index.html docs/images/ leaflet_offers_cache.json || true
           if git diff --cached --quiet; then
             echo "No changes."
           else
-            git commit -m "chore: update promotions $(date -u +%Y-%m-%dT%H:%M)"
+            git commit -m "chore: daily scrape $(date -u +%Y-%m-%dT%H:%M)"
             git push
           fi
-
