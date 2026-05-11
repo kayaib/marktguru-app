@@ -551,6 +551,13 @@
       font-size: 0.9rem; cursor: pointer; padding: 4px 6px;
       -webkit-tap-highlight-color: transparent;
     }
+    .el-total {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 14px 4px 4px; margin-top: 4px;
+      border-top: 2px solid var(--text);
+    }
+    .el-total-label { font-size: 0.85rem; font-weight: 600; color: var(--text-2); }
+    .el-total-value { font-size: 1.2rem; font-weight: 800; color: var(--text); }
 
     /* ── Mobile ── */
     @media (max-width: 480px) {
@@ -1108,6 +1115,9 @@ function renderEinkaufsliste() {
     if (!byRetailer[o.retailer]) byRetailer[o.retailer] = [];
     byRetailer[o.retailer].push(o);
   }
+  const total = liked.reduce((sum, o) => sum + (o.price_value || 0), 0);
+  const hasAllPrices = liked.every(o => o.price_value > 0);
+
   let html = `<div style="max-width:680px;margin:0 auto;padding:8px 0">`;
   for (const retailer of Object.keys(byRetailer).sort((a,b) => a.localeCompare(b,"de"))) {
     html += `<div class="el-group"><div class="el-retailer">${esc(retailer)}</div>`;
@@ -1128,6 +1138,10 @@ function renderEinkaufsliste() {
     }
     html += `</div>`;
   }
+  html += `<div class="el-total">
+    <span class="el-total-label">Gesamt${hasAllPrices ? "" : " (ca.)"}</span>
+    <span class="el-total-value">${total.toLocaleString("de-DE", {minimumFractionDigits:2, maximumFractionDigits:2})} €</span>
+  </div>`;
   html += `</div>`;
   document.getElementById("content").innerHTML = html;
 }
