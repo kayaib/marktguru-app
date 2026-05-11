@@ -740,6 +740,15 @@ const esc = s => String(s ?? "")
   .replace(/&/g,"&amp;").replace(/</g,"&lt;")
   .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
+const _PLACEHOLDER_DATES = new Set(["31.12.2025","31.12.2026","31.12.2099","01.01.2000","01.01.1970"]);
+function fmtDate(d) { return _PLACEHOLDER_DATES.has(d) ? "" : (d || ""); }
+function fmtValidity(from, until) {
+  const f = fmtDate(from), u = fmtDate(until);
+  if (!f && !u) return "";
+  if (f && u)   return `${f} – ${u}`;
+  return f || u;
+}
+
 // ── KW helpers ────────────────────────────────────────────────────────────────
 function parseDate(dmy) {
   if (!dmy) return null;
@@ -983,7 +992,7 @@ function renderProspekte() {
           <div class="lc-meta">
             <span class="offers-pill">${l.offer_count} Angebote</span>
           </div>
-          <div style="font-size:.63rem;color:#aaa;margin-top:4px">${esc(l.valid_from)} – ${esc(l.valid_until)}</div>
+          <div style="font-size:.63rem;color:#aaa;margin-top:4px">${esc(fmtValidity(l.valid_from, l.valid_until))}</div>
         </div>
       </a>`;
     }
@@ -1039,7 +1048,7 @@ function renderAngebote() {
               <span class="pc-price">${esc(o.price)}</span>${orig}
             </div>
             ${unit}
-            <div class="pc-valid">${esc(o.valid_from)} – ${esc(o.valid_until)}</div>
+            <div class="pc-valid">${esc(fmtValidity(o.valid_from, o.valid_until))}</div>
           </div>
         </div>`;
     }
@@ -1155,7 +1164,7 @@ function openDetail(id) {
     return `<div class="dp-row"><span class="dp-row-label">${label}</span><span class="dp-row-value">${value}</span></div>`;
   }
 
-  const validity = [o.valid_from, o.valid_until].filter(Boolean).join(" – ");
+  const validity = fmtValidity(o.valid_from, o.valid_until);
 
   document.getElementById("detail-content").innerHTML = `
     <div class="dp-header">
