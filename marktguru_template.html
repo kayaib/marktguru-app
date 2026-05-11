@@ -786,8 +786,9 @@ function renderToolbar() {
 function populateRetailerSelect() {
   const all = [...new Set(allOffers.map(o => o.retailer))].sort((a,b) => a.localeCompare(b,"de"));
   const toShow = favourites.size > 0 ? all.filter(r => favourites.has(r)) : all;
+  const allLabel = favourites.size > 0 ? "Alle Favoriten" : "Alle Märkte";
   const sel = document.getElementById("retailer-select");
-  sel.innerHTML = `<option value="">Alle Märkte</option>` +
+  sel.innerHTML = `<option value="">${allLabel}</option>` +
     toShow.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
   if (!toShow.includes(activeRetailer)) activeRetailer = "";
   sel.value = activeRetailer;
