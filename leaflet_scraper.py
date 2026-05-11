@@ -263,7 +263,22 @@ Do not include non-product content (logos, decorations, store info)."""
     return json.loads(content[start:end])
 
 
-def _scrape_leaflet(leaflet_id: str, retailer: str, valid_from: str, valid_until: str) -> list[dict]:
+def _fix_date(date_str: str, leaflet_date: str) -> str:
+    """Fix vision-OCR date errors: wrong year → use leaflet year; empty → use leaflet date."""
+    if not date_str:
+        return leaflet_date
+    m = re.match(r"(\d{2})\.(\d{2})\.(\d{4})", date_str)
+    if not m:
+        return leaflet_date
+    day, month, year = m.group(1), m.group(2), int(m.group(3))
+    # Correct implausible years (OCR misread, e.g. 2020 instead of 2026)
+    if year < 2024:
+        ref_year = datetime.now(timezone.utc).year
+        date_str = f"{day}.{month}.{ref_year}"
+    return date_str
+
+
+
     """Scrape all pages of one leaflet, return list of offers."""
     if not AICORE_CLIENT_ID or not AICORE_CLIENT_SECRET or not AICORE_DEPLOYMENT_ID:
         return []
@@ -311,8 +326,8 @@ def _scrape_leaflet(leaflet_id: str, retailer: str, valid_from: str, valid_until
                     "original_price": o.get("original_price") or "",
                     "price_per_unit": "",
                     "discount_pct": o.get("discount_pct"),
-                    "valid_from": o.get("valid_from") or valid_from,
-                    "valid_until": o.get("valid_until") or valid_until,
+                    "valid_from": _fix_date(o.get("valid_from", ""), valid_from),
+                    "valid_until": _fix_date(o.get("valid_until", ""), valid_until),
                     "image_url": "",
                     "has_image": False,
                     "source": "vision",
@@ -373,8 +388,8 @@ def _scrape_pm_leaflet(brochure_id: str, detail_url: str, retailer: str,
                     "original_price": o.get("original_price") or "",
                     "price_per_unit": "",
                     "discount_pct": o.get("discount_pct"),
-                    "valid_from": o.get("valid_from") or valid_from,
-                    "valid_until": o.get("valid_until") or valid_until,
+                    "valid_from": _fix_date(o.get("valid_from", ""), valid_from),
+                    "valid_until": _fix_date(o.get("valid_until", ""), valid_until),
                     "image_url": "",
                     "has_image": False,
                     "source": "vision",
