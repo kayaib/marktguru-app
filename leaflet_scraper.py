@@ -42,11 +42,13 @@ HEADERS = {
     )
 }
 
-# Only scrape these relevant retailers (skip travel agencies, gas stations etc.)
-RELEVANT_RETAILERS = {
-    "Kaufland", "NORMA", "Alnatura", "METRO", "Smyths Toys",
-    "GALERIA", "GALERIA Markthalle", "HIT", "CAP MARKT", "Bioladen",
-    "SELGROS Cash & Carry", "dm-drogerie markt", "ROSSMANN",
+# Blacklist: skip these retailers even if they have few/no indexed offers
+# (travel agencies, gas stations, banks, insurance — not grocery/retail)
+_IRRELEVANT_RETAILERS = {
+    "RAN Tankstelle", "PENNY Reisen", "RIW Touristik",
+    "Volksbank Raiffeisenbank", "Schöffel-LOWA", "Kochlöffel",
+    "Bosch Car Service", "Matratzen Concord", "ElectronicPartner",
+    "Tuinmaximaal",
 }
 
 _token_cache: dict = {}
@@ -422,7 +424,7 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
 
     mg_to_scrape = [
         l for l in leaflets
-        if l.get("retailer") in RELEVANT_RETAILERS
+        if l.get("retailer") not in _IRRELEVANT_RETAILERS
         and l.get("offer_count", 0) < _SCRAPE_THRESHOLD
         and not str(l.get("leaflet_id", "")).startswith("kd_")
         and str(l.get("leaflet_id", "")) not in cache
@@ -464,7 +466,7 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
         CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"  Vision cache saved ({len(cache)} leaflets)", file=sys.stderr)
     else:
-        n_relevant = len([l for l in leaflets if l.get("retailer") in RELEVANT_RETAILERS])
+        n_relevant = len([l for l in leaflets if l.get("retailer") not in _IRRELEVANT_RETAILERS])
         print(f"  Vision scraping: all {n_relevant} relevant leaflets already cached", file=sys.stderr)
 
     all_offers: list[dict] = []
