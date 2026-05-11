@@ -188,6 +188,20 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
 
     all_offers.sort(key=lambda o: (o["industry"], o["retailer"], o["title"]))
 
+    # ── Deduplicate marktguru offers (same retailer+title+price from multiple branches) ──
+    dedup_seen: set[tuple] = set()
+    deduped: list[dict] = []
+    for o in all_offers:
+        key = (_normalize_name(o["retailer"]), _normalize_name(o["title"]), o.get("price_value", 0))
+        if key in dedup_seen:
+            continue
+        dedup_seen.add(key)
+        deduped.append(o)
+    removed = len(all_offers) - len(deduped)
+    if removed:
+        print(f"  Deduplicated {removed} duplicate offers", file=sys.stderr)
+    all_offers = deduped
+
     added = [p["retailer"] for p in kd_converted]
     if added:
         unique_added = sorted(set(added))
