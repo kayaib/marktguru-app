@@ -26,6 +26,10 @@ _INDUSTRY_MAP = {
     "kaufland":          "Supermarkt",
     "marktkauf":         "Supermarkt",
     "globus":            "Supermarkt",
+    "hit":               "Supermarkt",
+    "cap markt":         "Supermarkt",
+    "bioladen":          "Supermarkt",
+    "alnatura":          "Supermarkt",
     "penny":             "Discounter",
     "aldi süd":          "Discounter",
     "aldi nord":         "Discounter",
@@ -50,11 +54,14 @@ _INDUSTRY_MAP = {
     "stihl":             "Zoo & Garten",
     "pflanzen":          "Zoo & Garten",
     "metro":             "Getränkemarkt",
+    "selgros":           "Getränkemarkt",
     "trinkgut":          "Getränkemarkt",
     "ikea":              "Möbelhaus",
     "xxxlutz":           "Möbelhaus",
     "mömax":             "Möbelhaus",
     "möbel":             "Möbelhaus",
+    "galeria":           "Mode & Schuh",
+    "smyths":            "Elektromarkt",
 }
 
 
@@ -155,6 +162,29 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
 
     all_offers  = mg_offers + kd_converted
     all_leaflets = mg_leaflets + kd_leaflets
+
+    # ── Vision scraping for retailers with offerCount=0 ───────────────────────
+    try:
+        import leaflet_scraper as vs
+        vision_offers = vs.scrape_missing_leaflets(mg_leaflets)
+        if vision_offers:
+            vis_seen: set[str] = {_normalize_name(o["retailer"]) + "|" + _normalize_name(o["title"])
+                                  for o in all_offers}
+            vis_added = []
+            for o in vision_offers:
+                key = _normalize_name(o["retailer"]) + "|" + _normalize_name(o["title"])
+                if key in vis_seen:
+                    continue
+                vis_seen.add(key)
+                # Set industry based on retailer name
+                o["industry"]  = _industry_for(o["retailer"])
+                o["category"]  = o["industry"]
+                vis_added.append(o)
+            all_offers.extend(vis_added)
+            print(f"  vision gap-fill: {len(vis_added)} offers from "
+                  f"{sorted(set(o['retailer'] for o in vis_added))}", file=sys.stderr)
+    except Exception as e:
+        print(f"  vision scraping skipped: {e}", file=sys.stderr)
 
     all_offers.sort(key=lambda o: (o["industry"], o["retailer"], o["title"]))
 
