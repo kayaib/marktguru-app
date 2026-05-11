@@ -63,7 +63,10 @@
     #status-chip {
       font-size: 0.72rem; color: rgba(255,255,255,0.8);
       white-space: nowrap; display: flex; align-items: center; gap: 5px;
-      margin-left: auto; flex-shrink: 0;
+      margin-left: auto; flex-shrink: 1; min-width: 0; overflow: hidden;
+    }
+    #status-txt {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .dot {
       width: 7px; height: 7px; border-radius: 50%;
@@ -146,8 +149,8 @@
       padding: 3px; flex-shrink: 0;
     }
     .view-btn {
-      padding: 5px 14px; border: none; border-radius: 8px;
-      font-size: 0.8rem; font-weight: 700; cursor: pointer;
+      padding: 5px 10px; border: none; border-radius: 8px;
+      font-size: 0.75rem; font-weight: 700; cursor: pointer;
       background: transparent; color: rgba(255,255,255,0.75);
       transition: all 0.15s; white-space: nowrap;
       -webkit-tap-highlight-color: transparent;
@@ -429,6 +432,7 @@
     /* ── Mobile ── */
     @media (max-width: 480px) {
       .nav-brand small { display: none; }
+      #status-chip { display: none; }
 
       #controls { padding: 8px 12px 0; gap: 6px; }
       .sort-btn { padding: 6px 10px; font-size: 0.75rem; }
