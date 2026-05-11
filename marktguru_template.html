@@ -400,6 +400,20 @@
       transition: transform 0.25s ease;
     }
     #detail-overlay.open #detail-panel { transform: translateY(0); }
+    @media (min-width: 600px) {
+      #detail-overlay { align-items: center; }
+      #detail-panel {
+        border-radius: 16px;
+        max-height: 80vh;
+        width: 480px;
+        padding-bottom: 24px;
+        transform: scale(0.95);
+        opacity: 0;
+        transition: transform 0.2s ease, opacity 0.2s ease;
+      }
+      #detail-overlay.open #detail-panel { transform: scale(1); opacity: 1; }
+      .dp-handle { display: none; }
+    }
     .dp-handle {
       width: 40px; height: 4px; border-radius: 2px;
       background: var(--border); margin: 12px auto 0;
