@@ -1236,7 +1236,7 @@ function toggleFav(retailer) {
 }
 
 // ── Setters ───────────────────────────────────────────────────────────────────
-function setTab(t) { activeTab = t; activeRetailer = ""; populateRetailerSelect(); renderToolbar(); render(); }
+function setTab(t) { activeTab = t; populateRetailerSelect(); renderToolbar(); render(); }
 function setKW(key) {
   if (key === "alle") {
     activeKW = new Set(["alle"]);
