@@ -1046,8 +1046,7 @@ function populateRetailerSelect() {
   const sel = document.getElementById("retailer-select");
   sel.innerHTML = `<option value="">${allLabel}</option>` +
     toShow.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
-  if (!toShow.includes(activeRetailer)) activeRetailer = "";
-  sel.value = activeRetailer;
+  sel.value = toShow.includes(activeRetailer) ? activeRetailer : "";
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -1140,10 +1139,13 @@ function renderAngebote() {
 
   let html = "";
   if (offers.length === 0) {
-    const hint = favourites.size > 0 ? `<div style="font-size:.82rem;margin-top:8px;color:var(--muted)">Tipp: Märkte in ⚙️ Einstellungen als Favorit markieren</div>` : "";
+    const msg = activeRetailer && activeTab !== "Alle"
+      ? `${esc(activeRetailer)} hat keine Angebote in der Kategorie „${esc(activeTab)}".`
+      : `Keine Angebote gefunden${searchQuery ? ` für „${esc(searchQuery)}"` : ""}.`;
+    const hint = favourites.size > 0 && !activeRetailer ? `<div style="font-size:.82rem;margin-top:8px;color:var(--muted)">Tipp: Märkte in ⚙️ Einstellungen als Favorit markieren</div>` : "";
     html += `<div class="empty-state">
       <div class="icon">🔍</div>
-      Keine Angebote gefunden${searchQuery ? ` für „${esc(searchQuery)}"` : ""}.
+      ${msg}
       ${hint}
     </div>`;
   } else {
