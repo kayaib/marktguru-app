@@ -506,6 +506,51 @@
     /* ── Fav badge on retailer label ── */
     .fav-star { font-size: 0.75rem; margin-left: 2px; }
 
+    .like-btn {
+      position: absolute; top: 6px; right: 6px;
+      background: rgba(255,255,255,0.85); border: none;
+      border-radius: 50%; width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: #ccc;
+      transition: color 0.15s, background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      z-index: 1;
+    }
+    .like-btn:hover { color: #e57373; background: #fff; }
+    .like-btn.liked { color: #e53935; background: #fff; }
+
+    .like-badge {
+      display: inline-block; background: var(--primary); color: #fff;
+      font-size: 0.65rem; font-weight: 700; border-radius: 10px;
+      padding: 1px 5px; margin-left: 4px; vertical-align: middle;
+    }
+    .like-badge:empty { display: none; }
+
+    .el-group { margin-bottom: 20px; }
+    .el-retailer {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      color: var(--primary); padding: 6px 0 4px; letter-spacing: .04em;
+      border-bottom: 1px solid var(--border); margin-bottom: 4px;
+    }
+    .el-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 4px; border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .el-row:hover { background: var(--bg); }
+    .el-img { width: 44px; height: 44px; object-fit: contain; border-radius: 6px; background: var(--bg); flex-shrink: 0; }
+    .el-img-ph { width: 44px; height: 44px; border-radius: 6px; background: var(--bg); flex-shrink: 0; }
+    .el-info { flex: 1; min-width: 0; }
+    .el-title { font-size: 0.88rem; font-weight: 600; }
+    .el-brand { font-size: 0.75rem; color: var(--muted); }
+    .el-valid { font-size: 0.7rem; color: var(--muted); }
+    .el-price { font-size: 0.95rem; font-weight: 700; color: var(--primary); flex-shrink: 0; }
+    .el-remove {
+      background: none; border: none; color: var(--muted);
+      font-size: 0.9rem; cursor: pointer; padding: 4px 6px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
     /* ── Mobile ── */
     @media (max-width: 480px) {
       .nav-brand small { display: none; }
@@ -552,7 +597,8 @@
     </div>
     <div id="view-switcher">
       <button class="view-btn active" data-view="angebote" onclick="setView(this)">Angebote</button>
-      <button class="view-btn"        data-view="prospekte" onclick="setView(this)">Prospekte</button>
+      <button class="view-btn"        data-view="prospekte"     onclick="setView(this)">Prospekte</button>
+      <button class="view-btn"        data-view="einkaufsliste" onclick="setView(this)">Einkaufsliste<span id="like-count-badge" class="like-badge"></span></button>
     </div>
     <button id="settings-btn" onclick="openSettings()" title="Einstellungen">⚙️</button>
   </div>
@@ -875,6 +921,27 @@ function saveFavourites() {
   localStorage.setItem("fav_retailers", JSON.stringify([...favourites]));
 }
 
+let likedOffers = new Set(JSON.parse(localStorage.getItem("liked_offers") || "[]"));
+
+function saveLikedOffers() {
+  localStorage.setItem("liked_offers", JSON.stringify([...likedOffers]));
+}
+
+function updateLikeBadge() {
+  const b = document.getElementById("like-count-badge");
+  if (b) b.textContent = likedOffers.size > 0 ? String(likedOffers.size) : "";
+}
+
+function toggleLike(id, event) {
+  event.stopPropagation();
+  likedOffers.has(id) ? likedOffers.delete(id) : likedOffers.add(id);
+  saveLikedOffers();
+  updateLikeBadge();
+  const btn = document.getElementById(`like-${id}`);
+  if (btn) btn.classList.toggle("liked", likedOffers.has(id));
+  if (activeView === "einkaufsliste") render();
+}
+
 // ── Filter + sort ────────────────────────────────────────────────────────────
 function filtered() {
   let list = allOffers;
@@ -987,6 +1054,8 @@ function populateRetailerSelect() {
 function render() {
   if (activeView === "prospekte") {
     renderProspekte();
+  } else if (activeView === "einkaufsliste") {
+    renderEinkaufsliste();
   } else {
     renderAngebote();
   }
@@ -1018,6 +1087,48 @@ function renderProspekte() {
     }
     html += `</div>`;
   }
+  document.getElementById("content").innerHTML = html;
+}
+
+function renderEinkaufsliste() {
+  const liked = allOffers.filter(o => likedOffers.has(String(o.id)));
+  if (liked.length === 0) {
+    document.getElementById("content").innerHTML =
+      `<div style="text-align:center;padding:60px 20px;color:var(--muted)">
+        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:12px;opacity:.4">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+        <div style="font-weight:600">Noch keine Produkte gemerkt</div>
+        <div style="font-size:.8rem;margin-top:6px">Tippe auf ♡ auf einer Kachel</div>
+      </div>`;
+    return;
+  }
+  const byRetailer = {};
+  for (const o of liked) {
+    if (!byRetailer[o.retailer]) byRetailer[o.retailer] = [];
+    byRetailer[o.retailer].push(o);
+  }
+  let html = `<div style="max-width:680px;margin:0 auto;padding:8px 0">`;
+  for (const retailer of Object.keys(byRetailer).sort((a,b) => a.localeCompare(b,"de"))) {
+    html += `<div class="el-group"><div class="el-retailer">${esc(retailer)}</div>`;
+    for (const o of byRetailer[retailer]) {
+      const img = o.image_url
+        ? `<img src="${esc(o.image_url)}" class="el-img" loading="lazy">`
+        : `<div class="el-img-ph"></div>`;
+      html += `<div class="el-row" onclick="openDetail('${esc(String(o.id))}')">
+        ${img}
+        <div class="el-info">
+          <div class="el-title">${esc(o.title)}</div>
+          ${o.brand ? `<div class="el-brand">${esc(o.brand)}</div>` : ""}
+          <div class="el-valid">${esc(fmtValidity(o.valid_from, o.valid_until))}</div>
+        </div>
+        <div class="el-price">${esc(o.price || "–")}</div>
+        <button class="el-remove" onclick="toggleLike('${esc(String(o.id))}',event)" title="Entfernen">✕</button>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  html += `</div>`;
   document.getElementById("content").innerHTML = html;
 }
 
@@ -1056,9 +1167,11 @@ function renderAngebote() {
       const unit  = o.price_per_unit ? `<div class="pc-unit">${esc(o.price_per_unit)}</div>` : "";
       const orig  = o.original_price ? `<span class="pc-orig">${esc(o.original_price)}</span>` : "";
       const favMark = favourites.has(o.retailer) ? `<span class="fav-star">★</span>` : "";
+      const heartSvg = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+      const likeBtn = `<button class="like-btn${likedOffers.has(String(o.id))?' liked':''}" id="like-${esc(String(o.id))}" onclick="toggleLike('${esc(String(o.id))}',event)" title="Zur Einkaufsliste">${heartSvg}</button>`;
       html += `
         <div class="product-card" onclick="openDetail('${esc(String(o.id))}')">
-          <div class="pc-img-wrap">${img}${disc}</div>
+          <div class="pc-img-wrap">${img}${disc}${likeBtn}</div>
           <div class="pc-body">
             <span class="pc-industry ${indCss}">${esc(o.industry)}</span>
             <div class="pc-title">${esc(o.title)}</div>
@@ -1173,6 +1286,7 @@ function loadData() {
   document.getElementById("controls").style.display = "flex";
   document.getElementById("status-txt").textContent =
     `${allLeaflets.length} Prospekte · ${allOffers.length.toLocaleString("de")} Angebote`;
+  updateLikeBadge();
 }
 
 // ── Detail modal ──────────────────────────────────────────────────────────────
