@@ -50,14 +50,17 @@ def _classify_batch(offers: list[dict]) -> dict[str, bool]:
         for i, o in enumerate(offers)
     )
 
-    prompt = f"""Classify each product as either "food" or "nonfood".
-Food = edible products, beverages, cooking ingredients.
-Nonfood = everything else (electronics, clothing, cleaning, cosmetics, garden tools, furniture, etc.)
+    prompt = f"""You are a product classifier. Classify each product as "food" or "nonfood".
 
-Respond with ONLY a JSON array of strings, one per line, same order as input.
-Example: ["food","nonfood","food"]
+FOOD = products humans eat or drink: groceries, fruits, vegetables, meat, dairy, beverages, snacks, spices, cooking ingredients.
+NONFOOD = everything else: electronics, furniture, garden equipment, clothing, toys, pet supplies (including pet food), cleaning products, cosmetics, tools, outdoor furniture, garden swings, hammocks, etc.
 
-Products:
+Important: pet food (dog food, cat food) is NONFOOD. Garden furniture (Hollywoodschaukel, Schaukel, Liegestuhl) is NONFOOD.
+
+Respond with ONLY a JSON array of strings in the same order as the input. Use only "food" or "nonfood".
+Example for 3 products: ["food","nonfood","food"]
+
+Products to classify:
 {lines}"""
 
     payload = {
