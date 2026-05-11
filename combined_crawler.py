@@ -17,6 +17,13 @@ from typing import Any
 # Retailers below this threshold get topped up from kaufda.
 _MG_MIN_OFFERS = 30
 
+# Retailers to exclude from all sources (opticians, travel agencies, banks etc.)
+_EXCLUDED_RETAILERS = {
+    "Opti-MegaStore", "RAN Tankstelle", "PENNY Reisen", "RIW Touristik",
+    "Volksbank Raiffeisenbank", "Schöffel-LOWA", "Kochlöffel",
+    "Bosch Car Service", "ElectronicPartner", "Tuinmaximaal",
+}
+
 # kaufda industry mapping (kaufda has no industry field — derive from retailer name)
 _INDUSTRY_MAP = {
     "rewe":              "Supermarkt",
@@ -160,8 +167,8 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
             "url":         f"https://www.marktguru.de/rp/{slug}-prospekte",
         })
 
-    all_offers  = mg_offers + kd_converted
-    all_leaflets = mg_leaflets + kd_leaflets
+    all_offers   = [o for o in mg_offers + kd_converted if o["retailer"] not in _EXCLUDED_RETAILERS]
+    all_leaflets = [l for l in mg_leaflets + kd_leaflets if l["retailer"] not in _EXCLUDED_RETAILERS]
 
     # ── Vision scraping for retailers with offerCount=0 ───────────────────────
     try:

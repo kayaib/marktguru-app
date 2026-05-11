@@ -48,7 +48,7 @@ _IRRELEVANT_RETAILERS = {
     "RAN Tankstelle", "PENNY Reisen", "RIW Touristik",
     "Volksbank Raiffeisenbank", "Schöffel-LOWA", "Kochlöffel",
     "Bosch Car Service", "Matratzen Concord", "ElectronicPartner",
-    "Tuinmaximaal",
+    "Tuinmaximaal", "Opti-MegaStore",
 }
 
 _token_cache: dict = {}
