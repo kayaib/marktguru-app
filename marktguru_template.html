@@ -498,12 +498,6 @@
 </div>
 
 <div id="toolbar"></div>
-<div id="fn-bar">
-  <span>Kategorie:</span>
-  <button class="fn-btn active" data-fn="alle"     onclick="setFN(this)">Alle</button>
-  <button class="fn-btn"        data-fn="food"     onclick="setFN(this)">🥦 Food</button>
-  <button class="fn-btn"        data-fn="non-food" onclick="setFN(this)">🧴 Non-Food</button>
-</div>
 <div id="kw-bar" style="display:none"></div>
 
 <div id="controls" style="display:none">
@@ -523,36 +517,123 @@
 // ── State ──────────────────────────────────────────────────────────────────
 let allLeaflets = [];
 let allOffers   = [];
-let activeTab      = "Alle";
-let activeSort     = "default";
+let activeTab      = "Alle";let activeSort     = "default";
 let activeRetailer = "";
 let searchQuery    = "";
 let activeKW       = "alle";
-let activeFN       = "alle";
 let activeView     = "angebote";  // "angebote" | "prospekte"
 let favourites     = new Set(JSON.parse(localStorage.getItem("fav_retailers") || "[]"));
 
-const IND_ORDER = [
-  "Alle","Supermarkt","Discounter","Drogerie & Gesundheit","Baumarkt",
-  "Elektromarkt","Mode & Schuh","Sport & Outdoor","Zoo & Garten",
-  "Getränkemarkt","Möbelhaus","Essen & Genießen"
+const CAT_ORDER = [
+  "Alle","Lebensmittel","Getränke","Drogerie","Kleidung","Heim & Garten","Technik","Sport & Freizeit"
 ];
 
-const NON_FOOD_IND = new Set([
-  "Baumarkt","Elektromarkt","Mode & Schuh","Sport & Outdoor","Möbelhaus"
-]);
-const FOOD_IND = new Set([
-  "Supermarkt","Discounter","Getränkemarkt","Essen & Genießen"
-]);
+// Map granular category strings → top-level tab
+const CAT_MAP = {
+  // Lebensmittel
+  "Lebensmittel":1, "Käse":1, "Joghurt":1, "Milch":1, "Butter":1, "Sahne, Schmand und Crème fraîche":1,
+  "Eier-Teigwaren":1, "Brot":1, "Brötchen":1, "Backzutaten und -mischungen":1, "Mehl":1, "Zucker und Süßungsmittel":1,
+  "Schweinefleisch":1, "Rindfleisch":1, "Geflügel":1, "Hackfleisch":1, "Lammfleisch":1, "Kalbfleisch":1,
+  "Tiefkühlfleisch":1, "mariniertes Fleisch":1, "gemischte Fleischwaren":1,
+  "Würste":1, "Schinken":1, "Salami":1, "Wurstsalate":1, "Wurstaufschnitt":1, "Leberwurst":1, "Fischsalate":1,
+  "Frischfisch":1, "Räucherfisch":1, "Meeresfrüchte":1, "Fischkonserven":1, "Tiefkühlfisch":1, "marinierter Fisch":1,
+  "Tiefkühlgerichte":1, "Tiefkühlbackwaren":1, "Tiefkühlpizza":1, "Tiefkühlkartoffeln":1, "Tiefkühlobst":1, "Tiefkühlgemüse":1,
+  "Nudeln":1, "Reis":1, "Instantgerichte":1, "Dosengerichte":1, "Gemüsekonserven":1, "Nudelsalate":1,
+  "Tomaten":1, "Paprika":1, "Spargel":1, "Pilze":1, "Salate":1, "Wurzelgemüse":1, "Zwiebelgemüse":1,
+  "Feinkostgemüse":1, "Zucchini & Kürbis":1, "Mais":1, "Kohl":1, "Gurke":1, "Sonstiges Gemüse":1,
+  "Äpfel":1, "Beeren":1, "Exotische Früchte":1, "Melonen":1, "Steinobst":1, "Birnen":1, "Weintrauben":1,
+  "Zitrusfrüchte":1, "Trockenobst":1, "Linsen":1, "Getreide":1, "Stärke-Bindemittel":1,
+  "Schokoladen":1, "Eis":1, "Kekse":1, "Desserts":1, "Fruchtgummi":1, "Chips":1, "Salzgebäck":1,
+  "Knabbereien":1, "Popcorn":1, "Kuchen & Feinbackwaren":1, "Tortendeko":1,
+  "Nüsse":1, "Müsliriegel":1, "Müslimischungen":1, "Schokoaufstrich":1, "herzhafte Aufstriche":1,
+  "Marmeladen":1, "Honig":1, "Dips":1, "Pesto":1, "Soßen":1, "Antipasti":1, "Salatdressing":1,
+  "Öl":1, "Essig und Balsamico":1, "Gewürzmischungen":1, "Kräuter":1, "Salz":1,
+  "Kaffee":1, "Tee":1, "Kakao":1, "Instantgetränke":1,
+  "Veganes":1, "Babynahrung":1, "Nahrungsergänzung":1,
+  "heiße Theke":1, "Feinkostsalate":1, "Internationale Spezialitäten":1,
+  "Essen & Genießen":1, "Supermarkt":1, "Discounter":1,
+  "Essensgutscheine":1, "Currywurst-Burger":1,
+  // Getränke
+  "Getränke":2, "Softdrinks":2, "Bier":2, "Weissweine":2, "Rotweine":2, "Roseweine":2, "Sekt":2,
+  "Wein":2, "Wasser":2, "Cocktails":2, "Liköre":2, "Whiskey":2, "Wodka":2, "Gin":2,
+  "Weinmischgetränke":2, "Brauner Rum":2, "Weißer Rum":2, "Brände":2, "Kornbrand":2, "Weinbrand":2,
+  "Likörweine":2, "Champagner":2, "Cava":2, "Craft Beer":2, "Alkoholfreies Bier":2,
+  "Getränkemarkt":2,
+  // Drogerie
+  "Drogerie":3, "Drogerie & Gesundheit":3,
+  "Duschgel":3, "Haarpflege":3, "Deo":3, "Zahngesundheit":3, "Rasierer":3, "Elektrische Zahnpflege":3,
+  "Waschmittel":3, "Reinigen":3, "Reinigungsgeräte":3, "Spülmittel":3,
+  "Toilettenpapier":3, "Taschentücher":3, "Küchenrolle":3, "Müllbeutel":3, "Haushaltshandschuhe":3,
+  "Windeln":3, "Babypflege":3, "Damenhygiene ":3,
+  "Gesichtspflege":3, "Cremes und Lotionen":3, "Makeup Zubehör":3, "Maniküre Pediküre":3,
+  "Sonnenschutz":3, "Herren Düfte":3, "Damen Düfte":3,
+  "Pflaster & Verbandsmaterial":3, "Wundheilmittel":3, "Mobilitäts- & Alltagshilfen":3,
+  "Erste-Hilfe":3, "Bandagen":3, "Gesundheitselektronik":3, "Lufterfrischer":3,
+  // Kleidung
+  "Kleidung":4, "Mode & Schuh":4,
+  "Herren Hosen":4, "Herren Shirts":4, "Herren Hemden":4, "Herren Pullover":4, "Herren Jacken":4,
+  "Herren Unterwäsche":4, "Herren Socken":4, "Herren Schuhe":4, "Herren Schlafanzüge":4, "Herren Gürtel":4,
+  "Herren Bademode":4, "Herren Sport":4,
+  "Damen Shirts":4, "Damen Hosen":4, "Damen Jacken":4, "Damen Schuhe":4, "Damen Socken":4,
+  "Damen Nachtwäsche":4, "Damen Bademode":4, "Damen Pullover":4, "Damen Sport":4, "Damen Gürtel":4,
+  "Dessous":4, "Kleider":4, "Röcke":4, "Kopfbedeckung":4, "Koffer":4, "Gürtel":4, "Schuhe":4,
+  "Unisex Schuhe":4, "Kinderschuhe":4, "Kinder- und Babybekleidung":4,
+  "Sportbekleidung":4, "Arbeitsbekleidung und -schuhe":4, "Uhren":4, "Schreibwaren":4,
+  // Heim & Garten
+  "Heim & Garten":5, "Zoo & Garten":5, "Baumarkt":5, "Möbelhaus":5,
+  "Pflanzen":5, "Schnittblumen":5, "Dünger Blumenerde":5, "Pflanzenzubehör":5,
+  "Gartenstühle":5, "Gartentische":5, "Gartenmöbel":5, "Sonnenschirme":5, "Sichtschutz":5,
+  "Gartenbeleuchtung":5, "Grills":5, "Grillzubehör":5, "Gartenspielgeräte":5,
+  "Rasenmäher":5, "Rasentrimmer":5, "Heckenscheren":5, "Gartenhandwerkzeug":5,
+  "Gartenbewässerung":5, "Poolzubehör und -bau":5, "Gartenhaus":5, "Gartenhäuser":5,
+  "Pavillons":5, "Markisen":5, "Vordächer":5, "Terassendielen":5, "Terassenstrahler":5,
+  "Terassendächer":5, "Strandkörbe":5, "Gartendekoration":5, "Gartenpflege":5,
+  "Sofas":5, "Betten":5, "Matratzen":5, "Schränke":5, "Regale":5, "Tische":5, "Stühle":5,
+  "Sessel":5, "Kommoden":5, "Wohnwände":5, "TV Möbel":5, "Büromöbel":5, "Babymöbel":5,
+  "Kindermöbel":5, "Garderoben":5, "Werkstattmöbel":5, "Sitzbänke":5, "Kleinmöbel":5,
+  "Badmöbel":5, "Küchen":5, "Möbelserien":5, "Möbelplatten":5, "Bilder":5, "Spiegel":5,
+  "Wanddekoration":5, "Deko":5, "Kerzen":5, "Teppiche":5, "Bodenbeläge":5, "Paneele":5,
+  "Heimtextilien":5, "Küchenzubehör":5, "Töpfe":5, "Küchengeräte":5, "Küchengroßgeräte":5,
+  "Essgeschirr":5, "Besteck":5, "Glasartikel":5, "Aufbewahrungsbehälter":5,
+  "Leuchten":5, "Lampen":5, "Steckdosenleisten":5, "Kabel":5,
+  "Wäschenständer":5, "Waschmaschinen":5, "Geschirrspüler":5, "Kühlgeräte":5, "Klimageräte":5,
+  "Brennstoffe":5, "Heizstrahler":5, "Heizkörper":5,
+  "Sanitär":5, "Haustüren":5, "Fenster":5, "Trockenbau":5, "Fliesen":5, "Putze":5,
+  "Mörtel":5, "Farben":5, "Randsteine":5, "Dachrinnen":5, "Gewächshäuser":5, "Garagen":5,
+  "Gerätehäuser":5, "Fliegengitter":5, "Insektenschutz":5, "Jalousien":5,
+  "Leitern":5, "Schubkarren":5, "Haustechnik":5, "Küchenrolle":5,
+  "Küchentextilien":5, "Weihnachtsdeko":5, "Bücher":5, "Spielfiguren":5, "Plüschtiere":5,
+  "Bausätze":5, "Spiele":5, "Puppen":5, "Kinderwagen":5,
+  "Katzenfutter":5, "Hundefutter":5, "Kleintierzubehör":5, "Kleintierfutter":5, "Hundezubehör":5,
+  "Katzenzubehör":5, "Vogelzubehör":5, "Vogelfutter":5, "Pferdepflege":5, "Pferdefutter":5, "Aquaristik":5,
+  "Insektizide":5, "Dekopflanzen":5,
+  // Technik
+  "Technik":6, "Elektromarkt":6,
+  "TV":6, "Heimkinosysteme":6, "HiFi":6, "Radio":6, "Abspielgeräte":6,
+  "Handys":6, "Smartwatches":6, "Laptops":6, "Computerzubehör":6, "Netzwerk":6,
+  "Drucker-Scanner":6, "Bürozubehör":6, "Software":6,
+  "Kaffeemaschinen":6, "Kaffeevollautomaten":6,
+  "Haartrockner":6, "Rasierer":6,
+  "Akkuschrauber":6, "Bohrmaschinen":6, "Schleifer":6, "Bohrhämmer":6, "Kettensäge":6,
+  "Sägen":6, "Kompressoren":6, "Vertikutierer":6, "Traktor":6,
+  "Werkzeugkoffer":6, "Messgeräte":6, "Spezialwerkzeug":6, "Sonstiges Handwerkzeug":6, "Handwerkzeugzubehör":6,
+  "Elektrowerkzeugzubehör":6, "Schraubendreher":6, "Schraubenschlüssel":6,
+  "Batterien":6, "Staubsaugerbeutel":6, "Kopfhörer":6, "Foto-Video":6, "Multimedia":6,
+  "Auto":6, "Motorräder":6, "Filtersysteme":6,
+  // Sport & Freizeit
+  "Sport":7, "Sport & Outdoor":7, "Sport & Freizeit":7,
+  "Outdoorausrüstung":7, "Radsport":7, "Wassersport":7, "Fußball":7, "Basketball":7,
+  "Tennis":7, "Tischtennis":7, "Volleyball":7, "Darts ":7, "Fitness":7,
+  "Fanartikel":7, "Reise":7, "Koffer":7, "Schirme":7,
+  "Kindermalbedarf":7,
+};
 
-function isFood(o) {
-  // Use LLM classification if available
-  if (o.is_food === true)  return true;
-  if (o.is_food === false) return false;
-  // Fallback for unclassified offers: industry-based
-  if (NON_FOOD_IND.has(o.industry)) return false;
-  if (FOOD_IND.has(o.industry)) return true;
-  return false;
+function offerCat(o) {
+  const mapped = CAT_MAP[o.category];
+  if (mapped) return CAT_ORDER[mapped];
+  const mappedInd = CAT_MAP[o.industry];
+  if (mappedInd) return CAT_ORDER[mappedInd];
+  return "Lebensmittel"; // default fallback
 }
 
 const IND_CSS = {
@@ -697,12 +778,7 @@ function filtered() {
   let list = allOffers;
 
   if (activeTab !== "Alle")
-    list = list.filter(o => o.industry === activeTab);
-
-  if (activeFN === "food")
-    list = list.filter(o => isFood(o));
-  else if (activeFN === "non-food")
-    list = list.filter(o => !isFood(o));
+    list = list.filter(o => offerCat(o) === activeTab);
 
   if (activeRetailer)
     list = list.filter(o => o.retailer === activeRetailer);
@@ -745,11 +821,9 @@ function filtered() {
 }
 
 function filteredLeaflets() {
-  let list = activeTab === "Alle" ? allLeaflets : allLeaflets.filter(l => l.industry === activeTab);
-  if (activeFN === "food")
-    list = list.filter(l => FOOD_IND.has(l.industry) || (!NON_FOOD_IND.has(l.industry)));
-  else if (activeFN === "non-food")
-    list = list.filter(l => NON_FOOD_IND.has(l.industry));
+  let list = allLeaflets;
+  if (activeTab !== "Alle")
+    list = list.filter(l => offerCat({category: l.industry, industry: l.industry}) === activeTab);
   if (favourites.size > 0)
     list = list.filter(l => favourites.has(l.retailer));
   if (activeKW === "heute")
@@ -763,18 +837,19 @@ function filteredLeaflets() {
 }
 
 // ── Counts ───────────────────────────────────────────────────────────────────
-function indCounts() {
+function catCounts() {
   const c = { "Alle": allOffers.length };
-  for (const o of allOffers)
-    c[o.industry] = (c[o.industry]||0) + 1;
+  for (const o of allOffers) {
+    const cat = offerCat(o);
+    c[cat] = (c[cat]||0) + 1;
+  }
   return c;
 }
 
 // ── Toolbar ──────────────────────────────────────────────────────────────────
 function renderToolbar() {
-  const counts = indCounts();
-  const present = new Set(allOffers.map(o => o.industry));
-  const tabs = IND_ORDER.filter(t => t === "Alle" || present.has(t));
+  const counts = catCounts();
+  const tabs = CAT_ORDER.filter(t => t === "Alle" || counts[t]);
   document.getElementById("toolbar").innerHTML = tabs.map(t =>
     `<button class="tab${t===activeTab?" active":""}" onclick="setTab('${esc(t)}')">${esc(t)}
       <span class="badge">${(counts[t]||0).toLocaleString("de")}</span>
@@ -942,13 +1017,8 @@ function setView(btn) {
   activeView = btn.dataset.view;
   const isAngebote = activeView === "angebote";
   document.getElementById("toolbar").style.display = isAngebote ? "" : "none";
-  document.getElementById("fn-bar").style.display  = isAngebote ? "" : "none";
   document.getElementById("controls").style.display = isAngebote ? "flex" : "none";
   render();
-}
-function setFN(btn) {
-  document.querySelectorAll(".fn-btn").forEach(b => b.classList.remove("active"));
-  btn.classList.add("active"); activeFN = btn.dataset.fn; render();
 }
 function setSort(btn) {
   document.querySelectorAll(".sort-btn").forEach(b=>b.classList.remove("active"));
