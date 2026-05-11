@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from combined_crawler import fetch_all
+from classify import classify_offers
 
 TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "marktguru_template.html")
 OUTPUT   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "docs", "index.html")
@@ -18,6 +19,12 @@ OUTPUT   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "docs", "ind
 
 def main() -> None:
     leaflets, offers = fetch_all()
+
+    # Classify food/non-food via AI Core (cached)
+    classification = classify_offers(offers)
+    if classification:
+        for o in offers:
+            o["is_food"] = classification.get(str(o["id"]))  # True/False/None if unknown
 
     data_json = json.dumps(
         {"leaflets": leaflets, "offers": offers},

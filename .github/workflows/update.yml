@@ -23,13 +23,17 @@ jobs:
         run: pip install requests beautifulsoup4
 
       - name: Build index.html
+        env:
+          AICORE_CLIENT_ID: ${{ secrets.AICORE_CLIENT_ID }}
+          AICORE_CLIENT_SECRET: ${{ secrets.AICORE_CLIENT_SECRET }}
+          AICORE_DEPLOYMENT_ID: ${{ secrets.AICORE_DEPLOYMENT_ID }}
         run: python build.py
 
       - name: Commit and push if changed
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/index.html
+          git add docs/index.html classification_cache.json || true
           if git diff --cached --quiet; then
             echo "No changes."
           else
