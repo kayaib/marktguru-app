@@ -128,14 +128,24 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
 
     print("  Fetching from marktguru and kaufda in parallel…", file=sys.stderr)
 
+    mg_leaflets: list[dict] = []
+    mg_offers:   list[dict] = []
+    kd_brochures: list[dict] = []
+    kd_products:  list[dict] = []
+
     with ThreadPoolExecutor(max_workers=2) as pool:
         mg_future = pool.submit(mg.fetch_all)
         kd_future = pool.submit(kd.fetch_all)
-        mg_leaflets, mg_offers = mg_future.result()
-        kd_brochures, kd_products = kd_future.result()
-
-    print(f"  marktguru: {len(mg_offers)} offers, {len(mg_leaflets)} leaflets", file=sys.stderr)
-    print(f"  kaufda:    {len(kd_products)} offers, {len(kd_brochures)} leaflets", file=sys.stderr)
+        try:
+            mg_leaflets, mg_offers = mg_future.result()
+            print(f"  marktguru: {len(mg_offers)} offers, {len(mg_leaflets)} leaflets", file=sys.stderr)
+        except Exception as e:
+            print(f"  marktguru FAILED: {e}", file=sys.stderr)
+        try:
+            kd_brochures, kd_products = kd_future.result()
+            print(f"  kaufda:    {len(kd_products)} offers, {len(kd_brochures)} leaflets", file=sys.stderr)
+        except Exception as e:
+            print(f"  kaufda FAILED: {e}", file=sys.stderr)
 
     # ── Filter marktguru auf Allowlist ────────────────────────────────────────
     mg_offers_filtered   = [o for o in mg_offers   if _is_allowed(o["retailer"])]
