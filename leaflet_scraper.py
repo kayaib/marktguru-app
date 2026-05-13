@@ -26,9 +26,6 @@ CACHE_FILE  = Path(__file__).parent / "leaflet_offers_cache.json"
 IMAGES_DIR  = Path(__file__).parent / "docs" / "images"
 CDN_HOST    = "mg2de.b-cdn.net"
 
-# Scrape all leaflets regardless of how many offers marktguru has indexed
-_SCRAPE_THRESHOLD = float("inf")
-
 AICORE_AUTH_URL      = "https://retail-ai-g1f2q3e8.authentication.eu10.hana.ondemand.com"
 AICORE_API_URL       = "https://api.ai.prod.eu-central-1.aws.ml.hana.ondemand.com"
 AICORE_CLIENT_ID     = os.environ.get("AICORE_CLIENT_ID", "")
@@ -40,15 +37,6 @@ HEADERS = {
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     )
-}
-
-# Blacklist: skip these retailers even if they have few/no indexed offers
-# (travel agencies, gas stations, banks, insurance — not grocery/retail)
-_IRRELEVANT_RETAILERS = {
-    "RAN Tankstelle", "PENNY Reisen", "RIW Touristik",
-    "Volksbank Raiffeisenbank", "Schöffel-LOWA", "Kochlöffel",
-    "Bosch Car Service", "Matratzen Concord", "ElectronicPartner",
-    "Tuinmaximaal", "Opti-MegaStore",
 }
 
 _token_cache: dict = {}
@@ -74,27 +62,44 @@ def _page_url(leaflet_id: str, page: int) -> str:
     return f"https://{CDN_HOST}/api/v1/leaflets/{leaflet_id}/images/pages/{page}/medium.webp"
 
 
-# ── prospektmaschine.de (dm source) ─────────────────────────────────────────
+# ── prospektmaschine.de ───────────────────────────────────────────────────────
 
-def _fetch_pm_leaflets() -> list[dict]:
-    """Fetch dm leaflets from prospektmaschine.de (dm is absent from marktguru)."""
-    url = "https://www.prospektmaschine.de/dm-drogerie/"
+# Märkte auf prospektmaschine.de: (kanonischer Name, URL-Slug)
+_PM_MARKETS = [
+    ("dm-drogerie markt",     "dm-drogerie"),
+    ("E center",              "e-center"),
+    ("EDEKA",                 "edeka"),
+    ("Globus",                "globus"),
+    ("Globus Baumarkt",       "globus-baumarkt"),
+    ("Kaufland",              "kaufland"),
+    ("Lidl",                  "lidl"),
+    ("Marktkauf",             "marktkauf"),
+    ("nahkauf",               "nahkauf"),
+    ("Netto Marken-Discount", "netto"),
+    ("Norma",                 "norma"),
+    ("PENNY",                 "penny"),
+    ("REWE",                  "rewe"),
+    ("Rossmann",              "rossmann"),
+    ("tegut",                 "tegut"),
+    ("Wasgau",                "wasgau"),
+]
+
+
+def _fetch_pm_leaflets_for(retailer: str, slug: str) -> list[dict]:
+    """Fetch the current leaflet for one retailer from prospektmaschine.de."""
+    url = f"https://www.prospektmaschine.de/{slug}/"
     try:
         r = requests.get(url, headers=HEADERS, timeout=20)
         r.raise_for_status()
-    except Exception as e:
-        print(f"  prospektmaschine fetch failed: {e}", file=sys.stderr)
+    except Exception:
         return []
 
     soup = BeautifulSoup(r.text, "html.parser")
-    leaflets = []
     seen_ids: set[str] = set()
+    leaflets = []
     for card in soup.select(".brochure-thumb"):
         bid = card.get("data-brochure-id", "")
         if not bid or bid in seen_ids:
-            continue
-        shop_name = card.select_one(".shop-name")
-        if shop_name and "dm" not in shop_name.get_text().lower():
             continue
         seen_ids.add(bid)
         link = card.select_one("a[href]")
@@ -106,14 +111,25 @@ def _fetch_pm_leaflets() -> list[dict]:
             valid_from, valid_until = m.group(1), m.group(2)
         leaflets.append({
             "leaflet_id": f"pm_{bid}",
-            "retailer": "dm-drogerie markt",
+            "retailer": retailer,
             "offer_count": 0,
             "valid_from": valid_from,
             "valid_until": valid_until,
             "_pm_brochure_id": bid,
             "_pm_detail_url": link["href"] if link else "",
         })
-    return leaflets[:1]
+    return leaflets[:1]  # nur das aktuellste Prospekt
+
+
+def _fetch_all_pm_leaflets(already_scraped_retailers: set[str]) -> list[dict]:
+    """Fetch current leaflets from prospektmaschine.de for all known markets."""
+    results = []
+    for retailer, slug in _PM_MARKETS:
+        if retailer in already_scraped_retailers:
+            continue
+        leaflets = _fetch_pm_leaflets_for(retailer, slug)
+        results.extend(leaflets)
+    return results
 
 
 def _fetch_pm_page_images(brochure_id: str, detail_url: str) -> list[str]:
@@ -407,8 +423,9 @@ def _scrape_pm_leaflet(brochure_id: str, detail_url: str, retailer: str,
 
 def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
     """
-    For each leaflet from a relevant retailer with few indexed offers,
-    scrape via Vision AI. Also fetches dm from prospektmaschine.de.
+    Scrape offers via Vision AI from:
+    1. marktguru leaflets (passed in)
+    2. prospektmaschine.de for all known markets not already covered by marktguru
     Uses cache keyed by leaflet_id. Returns list of offers.
     """
     if not AICORE_CLIENT_ID or not AICORE_CLIENT_SECRET or not AICORE_DEPLOYMENT_ID:
@@ -428,10 +445,10 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
         and str(l.get("leaflet_id", "")) not in cache
     ]
 
-    pm_leaflets: list[dict] = []
-    if "dm-drogerie markt" not in {l.get("retailer") for l in leaflets}:
-        pm_leaflets = _fetch_pm_leaflets()
-        pm_leaflets = [l for l in pm_leaflets if l["leaflet_id"] not in cache]
+    # prospektmaschine.de für alle Märkte die marktguru nicht abdeckt
+    mg_retailers = {l.get("retailer") for l in leaflets}
+    pm_leaflets = _fetch_all_pm_leaflets(already_scraped_retailers=mg_retailers)
+    pm_leaflets = [l for l in pm_leaflets if l["leaflet_id"] not in cache]
 
     to_scrape_all = mg_to_scrape + pm_leaflets
 
@@ -464,8 +481,7 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
         CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"  Vision cache saved ({len(cache)} leaflets)", file=sys.stderr)
     else:
-        n_relevant = len([l for l in leaflets if l.get("retailer") not in _IRRELEVANT_RETAILERS])
-        print(f"  Vision scraping: all {n_relevant} relevant leaflets already cached", file=sys.stderr)
+        print(f"  Vision scraping: all {len(leaflets) + len(pm_leaflets)} leaflets already cached", file=sys.stderr)
 
     all_offers: list[dict] = []
     for entry in cache.values():
