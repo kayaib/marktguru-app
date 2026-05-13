@@ -230,7 +230,16 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
     # ── Vision scraping für Prospekte ohne Angebote ───────────────────────────
     try:
         import leaflet_scraper as vs
-        vision_offers = vs.scrape_missing_leaflets(mg_leaflets_filtered)
+        # Deduplizieren nach Händler vor dem Vision-Scrape (verhindert mehrfaches Scrapen
+        # desselben Prospekts aus verschiedenen ZIP-Codes)
+        mg_leaflets_deduped: list[dict] = []
+        _seen_retailers: set[str] = set()
+        for l in mg_leaflets_filtered:
+            key = _normalize_name(l["retailer"])
+            if key not in _seen_retailers:
+                _seen_retailers.add(key)
+                mg_leaflets_deduped.append(l)
+        vision_offers = vs.scrape_missing_leaflets(mg_leaflets_deduped)
         if vision_offers:
             vis_seen: set[str] = {
                 _normalize_name(o["retailer"]) + "|" + _normalize_name(o["title"])
