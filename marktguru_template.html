@@ -442,6 +442,14 @@
       flex-shrink: 0; line-height: 1;
       -webkit-tap-highlight-color: transparent;
     }
+    .dp-like {
+      background: none; border: 1.5px solid var(--border); border-radius: 50%;
+      width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+      color: var(--muted); cursor: pointer; flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent; transition: color .15s, border-color .15s;
+    }
+    .dp-like:hover { color: #e57373; border-color: #e57373; }
+    .dp-like.liked { color: #e53935; border-color: #e53935; }
     .dp-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
     .dp-price-row { display: flex; align-items: baseline; gap: 10px; }
     .dp-price { font-size: 1.5rem; font-weight: 800; color: var(--primary); }
@@ -958,6 +966,8 @@ function toggleLike(id, event) {
   updateLikeBadge();
   const btn = document.getElementById(`like-${id}`);
   if (btn) btn.classList.toggle("liked", likedOffers.has(id));
+  const dpBtn = document.getElementById("dp-like-btn");
+  if (dpBtn) dpBtn.classList.toggle("liked", likedOffers.has(id));
   if (activeView === "einkaufsliste") render();
 }
 
@@ -1339,6 +1349,8 @@ function openDetail(id) {
 
   const validity = fmtValidity(o.valid_from, o.valid_until);
 
+  const heartSvgLg = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+
   document.getElementById("detail-content").innerHTML = `
     <div class="dp-header">
       ${img}
@@ -1347,6 +1359,7 @@ function openDetail(id) {
         <div class="dp-title">${esc(o.title)}</div>
         ${brand}
       </div>
+      <button class="dp-like${likedOffers.has(String(o.id)) ? ' liked' : ''}" id="dp-like-btn" onclick="toggleLike('${esc(String(o.id))}',event)" title="Zur Einkaufsliste">${heartSvgLg}</button>
       <button class="dp-close" onclick="closeDetail()">✕</button>
     </div>
     <div class="dp-body">
