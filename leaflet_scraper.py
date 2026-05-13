@@ -424,9 +424,7 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
 
     mg_to_scrape = [
         l for l in leaflets
-        if l.get("retailer") not in _IRRELEVANT_RETAILERS
-        and l.get("offer_count", 0) < _SCRAPE_THRESHOLD
-        and not str(l.get("leaflet_id", "")).startswith("kd_")
+        if not str(l.get("leaflet_id", "")).startswith("kd_")
         and str(l.get("leaflet_id", "")) not in cache
     ]
 

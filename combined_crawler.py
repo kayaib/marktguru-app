@@ -101,8 +101,13 @@ _CANONICAL_NAMES = {
 
 def _is_allowed(retailer_name: str) -> bool:
     norm = _normalize_name(retailer_name)
+    if norm in ALLOWED_RETAILERS:
+        return True
     for allowed in ALLOWED_RETAILERS:
-        if allowed in norm or norm in allowed:
+        # exact substring only if the match covers most of the name (avoid "penny" matching "penny reisen")
+        if allowed in norm and len(allowed) / len(norm) > 0.8:
+            return True
+        if norm in allowed and len(norm) / len(allowed) > 0.8:
             return True
     return False
 
