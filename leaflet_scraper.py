@@ -384,18 +384,28 @@ def _scrape_leaflet(leaflet_id: str, retailer: str,
 
     all_offers: list[dict] = []
     seen_titles: set[str] = set()
-    for page in sorted(page_images.keys()):
+
+    def _analyze_one_mg_page(page: int) -> list[dict]:
         try:
-            raw_offers = _analyze_page(page_images[page], retailer, token)
-            for o in raw_offers:
+            raw = _analyze_page(page_images[page], retailer, token)
+            results = []
+            for o in raw:
                 title = o.get("title", "").strip()
-                if not title or title.lower() in seen_titles:
-                    continue
-                seen_titles.add(title.lower())
-                oid = f"vis_{leaflet_id}_{re.sub(r'[^a-z0-9]', '_', title.lower())[:40]}"
-                all_offers.append(_build_offer(o, oid, retailer, valid_from, valid_until, page_images[page]))
+                if title:
+                    oid = f"vis_{leaflet_id}_{re.sub(r'[^a-z0-9]', '_', title.lower())[:40]}"
+                    results.append((title, _build_offer(o, oid, retailer, valid_from, valid_until, page_images[page])))
+            return results
         except Exception as e:
             print(f"    Page {page} error: {e}", file=sys.stderr)
+            return []
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        page_futures = {pool.submit(_analyze_one_mg_page, p): p for p in sorted(page_images.keys())}
+        for future in as_completed(page_futures):
+            for title, offer in future.result():
+                if title.lower() not in seen_titles:
+                    seen_titles.add(title.lower())
+                    all_offers.append(offer)
 
     print(f"    {retailer}: extracted {len(all_offers)} offers "
           f"({sum(1 for o in all_offers if o['has_image'])} with images)", file=sys.stderr)
@@ -428,18 +438,28 @@ def _scrape_pm_leaflet(brochure_id: str, detail_url: str, retailer: str,
 
     all_offers: list[dict] = []
     seen_titles: set[str] = set()
-    for page in sorted(page_images.keys()):
+
+    def _analyze_one_pm_page(page: int) -> list[dict]:
         try:
-            raw_offers = _analyze_page(page_images[page], retailer, token)
-            for o in raw_offers:
+            raw = _analyze_page(page_images[page], retailer, token)
+            results = []
+            for o in raw:
                 title = o.get("title", "").strip()
-                if not title or title.lower() in seen_titles:
-                    continue
-                seen_titles.add(title.lower())
-                oid = f"vis_pm{brochure_id}_{re.sub(r'[^a-z0-9]', '_', title.lower())[:40]}"
-                all_offers.append(_build_offer(o, oid, retailer, valid_from, valid_until, page_images[page]))
+                if title:
+                    oid = f"vis_pm{brochure_id}_{re.sub(r'[^a-z0-9]', '_', title.lower())[:40]}"
+                    results.append((title, _build_offer(o, oid, retailer, valid_from, valid_until, page_images[page])))
+            return results
         except Exception as e:
             print(f"    Page {page} error: {e}", file=sys.stderr)
+            return []
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        page_futures = {pool.submit(_analyze_one_pm_page, p): p for p in sorted(page_images.keys())}
+        for future in as_completed(page_futures):
+            for title, offer in future.result():
+                if title.lower() not in seen_titles:
+                    seen_titles.add(title.lower())
+                    all_offers.append(offer)
 
     print(f"    {retailer}: extracted {len(all_offers)} offers "
           f"({sum(1 for o in all_offers if o['has_image'])} with images)", file=sys.stderr)
@@ -485,31 +505,41 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
     to_scrape_all = mg_to_scrape + pm_leaflets
 
     if to_scrape_all:
-        print(f"  Vision scraping {len(to_scrape_all)} leaflets: "
+        print(f"  Vision scraping {len(to_scrape_all)} leaflets in parallel: "
               f"{[l['retailer'] for l in to_scrape_all]}", file=sys.stderr)
 
-    for l in mg_to_scrape:
+    def _scrape_mg(l: dict) -> tuple[str, dict]:
         lid = str(l["leaflet_id"])
         offers = _scrape_leaflet(lid, l["retailer"], l.get("valid_from", ""), l.get("valid_until", ""))
-        cache[_cache_key(l)] = {
+        return _cache_key(l), {
             "retailer":   l["retailer"],
             "valid_from": l.get("valid_from", ""),
             "scraped_at": datetime.now(timezone.utc).isoformat(),
             "offers":     offers,
         }
 
-    for l in pm_leaflets:
-        lid = l["leaflet_id"]
+    def _scrape_pm(l: dict) -> tuple[str, dict]:
         offers = _scrape_pm_leaflet(
             l["_pm_brochure_id"], l["_pm_detail_url"],
             l["retailer"], l.get("valid_from", ""), l.get("valid_until", "")
         )
-        cache[_cache_key(l)] = {
+        return _cache_key(l), {
             "retailer":   l["retailer"],
             "valid_from": l.get("valid_from", ""),
             "scraped_at": datetime.now(timezone.utc).isoformat(),
             "offers":     offers,
         }
+
+    max_parallel = min(len(to_scrape_all), 4)
+    with ThreadPoolExecutor(max_workers=max_parallel) as pool:
+        mg_futures  = [pool.submit(_scrape_mg, l) for l in mg_to_scrape]
+        pm_futures  = [pool.submit(_scrape_pm, l) for l in pm_leaflets]
+        for future in as_completed(mg_futures + pm_futures):
+            try:
+                key, entry = future.result()
+                cache[key] = entry
+            except Exception as e:
+                print(f"  Leaflet scrape error: {e}", file=sys.stderr)
 
     if to_scrape_all:
         CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
