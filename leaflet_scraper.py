@@ -64,29 +64,33 @@ def _page_url(leaflet_id: str, page: int) -> str:
 
 # ── prospektmaschine.de ───────────────────────────────────────────────────────
 
-# Märkte auf prospektmaschine.de: (kanonischer Name, URL-Slug)
+# Märkte auf prospektmaschine.de: (kanonischer Name, URL-Slug, optionaler href-Filter)
 _PM_MARKETS = [
-    ("dm-drogerie markt",     "dm-drogerie"),
-    ("E center",              "e-center"),
-    ("EDEKA",                 "edeka"),
-    ("Globus",                "globus"),
-    ("Globus Baumarkt",       "globus-baumarkt"),
-    ("Kaufland",              "kaufland"),
-    ("Lidl",                  "lidl"),
-    ("Marktkauf",             "marktkauf"),
-    ("nahkauf",               "nahkauf"),
-    ("Netto Marken-Discount", "netto"),
-    ("Norma",                 "norma"),
-    ("PENNY",                 "penny"),
-    ("REWE",                  "rewe"),
-    ("Rossmann",              "rossmann"),
-    ("tegut",                 "tegut"),
-    ("Wasgau",                "wasgau"),
+    ("ALDI Nord",             "aldi",          "aldi-nord"),
+    ("dm-drogerie markt",     "dm-drogerie",   None),
+    ("E center",              "e-center",      None),
+    ("EDEKA",                 "edeka",         None),
+    ("Globus",                "globus",        None),
+    ("Globus Baumarkt",       "globus-baumarkt", None),
+    ("Kaufland",              "kaufland",      None),
+    ("Lidl",                  "lidl",          None),
+    ("Marktkauf",             "marktkauf",     None),
+    ("Müller",                "muller",        None),
+    ("nahkauf",               "nahkauf",       None),
+    ("Netto Marken-Discount", "netto",         None),
+    ("Norma",                 "norma",         None),
+    ("PENNY",                 "penny",         None),
+    ("REWE",                  "rewe",          None),
+    ("Rossmann",              "rossmann",      None),
+    ("tegut",                 "tegut",         None),
+    ("Wasgau",                "wasgau",        None),
 ]
 
 
-def _fetch_pm_leaflets_for(retailer: str, slug: str) -> list[dict]:
-    """Fetch the current leaflet for one retailer from prospektmaschine.de."""
+def _fetch_pm_leaflets_for(retailer: str, slug: str, href_filter: str | None = None) -> list[dict]:
+    """Fetch the current leaflet for one retailer from prospektmaschine.de.
+    href_filter: if set, only include cards whose link href contains this string.
+    """
     url = f"https://www.prospektmaschine.de/{slug}/"
     try:
         r = requests.get(url, headers=HEADERS, timeout=20)
@@ -101,8 +105,10 @@ def _fetch_pm_leaflets_for(retailer: str, slug: str) -> list[dict]:
         bid = card.get("data-brochure-id", "")
         if not bid or bid in seen_ids:
             continue
-        seen_ids.add(bid)
         link = card.select_one("a[href]")
+        if href_filter and (not link or href_filter not in link["href"]):
+            continue
+        seen_ids.add(bid)
         dates_el = card.select_one(".hidden-sm")
         dates_text = dates_el.get_text(strip=True) if dates_el else ""
         valid_from, valid_until = "", ""
@@ -124,10 +130,10 @@ def _fetch_pm_leaflets_for(retailer: str, slug: str) -> list[dict]:
 def _fetch_all_pm_leaflets(already_scraped_retailers: set[str]) -> list[dict]:
     """Fetch current leaflets from prospektmaschine.de for all known markets."""
     results = []
-    for retailer, slug in _PM_MARKETS:
+    for retailer, slug, href_filter in _PM_MARKETS:
         if retailer in already_scraped_retailers:
             continue
-        leaflets = _fetch_pm_leaflets_for(retailer, slug)
+        leaflets = _fetch_pm_leaflets_for(retailer, slug, href_filter)
         results.extend(leaflets)
     return results
 
