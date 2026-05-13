@@ -225,11 +225,13 @@ def _crop_and_save(img_bytes: bytes, bbox: list, offer_id: str) -> str:
 
 # ── vision analysis ───────────────────────────────────────────────────────────
 
-def _analyze_page(img_bytes: bytes, retailer: str, token: str) -> list[dict]:
-    """Send one page to gpt-4o Vision and extract offers with bounding boxes."""
+def _analyze_page(img_bytes: bytes, retailer: str, token: str,
+                  _retries: int = 2) -> list[dict]:
+    """Send one page to gpt-4o Vision and extract offers with bounding boxes.
+    Retries up to _retries times on timeout or 5xx errors with increasing timeouts.
+    """
     url = f"{AICORE_API_URL}/v2/inference/deployments/{AICORE_DEPLOYMENT_ID}/v1/chat/completions"
 
-    # Detect image format from magic bytes
     mime = "image/webp" if img_bytes[:4] == b"RIFF" or img_bytes[8:12] == b"WEBP" else "image/jpeg"
     b64 = base64.b64encode(img_bytes).decode()
 
@@ -265,23 +267,40 @@ Do not include non-product content (logos, decorations, store info)."""
         "max_tokens": 3000,
     }
 
-    r = requests.post(
-        url,
-        json=payload,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "AI-Resource-Group": "default",
-            "Content-Type": "application/json",
-        },
-        timeout=60,
-    )
-    r.raise_for_status()
-    content = r.json()["choices"][0]["message"]["content"].strip()
-    start = content.find("[")
-    end   = content.rfind("]") + 1
-    if start == -1:
-        return []
-    return json.loads(content[start:end])
+    last_exc: Exception = RuntimeError("no attempts made")
+    for attempt in range(_retries + 1):
+        timeout = 90 + attempt * 60  # 90s → 150s → 210s
+        try:
+            r = requests.post(
+                url,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "AI-Resource-Group": "default",
+                    "Content-Type": "application/json",
+                },
+                timeout=timeout,
+            )
+            r.raise_for_status()
+            content = r.json()["choices"][0]["message"]["content"].strip()
+            start = content.find("[")
+            end   = content.rfind("]") + 1
+            if start == -1:
+                return []
+            return json.loads(content[start:end])
+        except (requests.Timeout, requests.exceptions.ReadTimeout) as e:
+            last_exc = e
+            if attempt < _retries:
+                print(f"    timeout on attempt {attempt + 1}, retrying…", file=sys.stderr)
+                time.sleep(5)
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code >= 500 and attempt < _retries:
+                last_exc = e
+                print(f"    {e.response.status_code} on attempt {attempt + 1}, retrying…", file=sys.stderr)
+                time.sleep(10)
+            else:
+                raise
+    raise last_exc
 
 
 # ── date helper ───────────────────────────────────────────────────────────────
@@ -314,7 +333,7 @@ def _build_offer(o: dict, offer_id: str, retailer: str,
         "id":             offer_id,
         "title":          o.get("title", "").strip(),
         "description":    o.get("description") or "",
-        "brand":          o.get("brand") or "",
+        "brand":          "" if (o.get("brand") or "").lower().startswith("thisisnobrand") else (o.get("brand") or ""),
         "retailer":       retailer,
         "retailer_id":    "",
         "industry":       "",  # set by combined_crawler
