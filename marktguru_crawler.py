@@ -13,8 +13,13 @@ from datetime import datetime, timezone
 import requests
 from bs4 import BeautifulSoup
 
-ZIP_CODE        = "73257"
-ZIP_CODE_REGION = "70173"  # Stuttgart — broader regional coverage for national leaflets
+ZIP_CODE         = "73257"          # Köngen
+ZIP_CODES_REGION = [                 # Stuttgart-Region für breitere Abdeckung
+    "70173",  # Stuttgart-Mitte
+    "70372",  # Stuttgart-Bad Cannstatt
+    "73730",  # Esslingen
+    "71332",  # Waiblingen
+]
 CDN_HOST  = "mg2de.b-cdn.net"
 API_BASE  = "https://api.marktguru.de/api/v1"
 SITE_URL  = "https://www.marktguru.de"
@@ -147,12 +152,12 @@ def _fetch_industry(industry_id: int, industry_name: str, api_key: str, zip_code
 
 
 def _fetch_leaflets(api_key: str) -> list[dict]:
-    """Fetch current brochures from local ZIP + regional ZIP for broader coverage."""
+    """Fetch current brochures from local ZIP + all regional ZIPs for broader coverage."""
     h = _api_headers(api_key)
     seen = set()
     leaflets = []
 
-    for zip_code in [ZIP_CODE, ZIP_CODE_REGION]:
+    for zip_code in [ZIP_CODE] + ZIP_CODES_REGION:
         url = f"{API_BASE}/leafletflights?as=web&zipCode={zip_code}&limit=100&offset=0"
         r = requests.get(url, headers=h, timeout=20)
         if r.status_code != 200:
@@ -192,9 +197,9 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
     all_offers: list[dict] = []
     seen_ids: set = set()
 
-    # Fetch from both local and regional ZIP codes
+    # Fetch from local + all regional ZIP codes
     tasks = [(ind_id, ind_name, ZIP_CODE) for ind_id, ind_name in TARGET_INDUSTRIES] + \
-            [(ind_id, ind_name, ZIP_CODE_REGION) for ind_id, ind_name in TARGET_INDUSTRIES]
+            [(ind_id, ind_name, z) for z in ZIP_CODES_REGION for ind_id, ind_name in TARGET_INDUSTRIES]
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         def _fetch_with_zip(args):

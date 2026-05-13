@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-kaufda.de crawler — fetches current promotions for Köngen (73257).
+kaufda.de crawler — fetches current promotions for the Stuttgart region.
 
 Fetches:
-  - brochures from the city landing page
+  - brochures from multiple city landing pages
   - all products from each retailer's store page (parallel requests)
 """
 
@@ -15,8 +15,13 @@ from datetime import datetime, timezone
 import requests
 from bs4 import BeautifulSoup
 
-CITY_SLUG = "Koengen"
-BASE_URL = f"https://www.kaufda.de/{CITY_SLUG}"
+# Mehrere Städte für bessere Marktabdeckung in der Region Stuttgart
+CITY_SLUGS = [
+    "Koengen",              # E center, Kaufland, Rossmann
+    "Stuttgart",            # tegut, dm
+    "Esslingen-am-Neckar",  # Marktkauf, Norma
+    "Waiblingen",           # nahkauf
+]
 
 # Retailer name → category label (used for filtering in the UI)
 RETAILER_CATEGORIES = {
@@ -97,27 +102,23 @@ def _next_data(soup: BeautifulSoup) -> dict | None:
 
 
 def fetch_all() -> tuple[list[dict], list[dict]]:
-    """Return (brochures, products). Fetches every store linked from the city page."""
+    """Return (brochures, products). Fetches every store from all city pages."""
 
-    # Step 1: fetch city landing page
-    _, city_soup = _fetch(BASE_URL)
-    if city_soup is None:
-        raise RuntimeError(f"Failed to fetch {BASE_URL}")
-
-    city_data = _next_data(city_soup)
-    if not city_data:
-        raise RuntimeError("__NEXT_DATA__ not found on city page")
-
-    # Collect ALL store page URLs from the city page (every /p-r link)
+    # Collect store URLs from all cities
     all_store_urls: list[str] = []
     seen_store_urls: set[str] = set()
-    for a in city_soup.find_all("a", href=True):
-        href = a["href"]
-        if "/p-r" in href and href not in seen_store_urls:
-            seen_store_urls.add(href)
-            all_store_urls.append(href)
 
-    # Step 2: fetch all store pages in parallel; collect brochures + products from each
+    for city_slug in CITY_SLUGS:
+        _, city_soup = _fetch(f"https://www.kaufda.de/{city_slug}")
+        if city_soup is None:
+            continue
+        for a in city_soup.find_all("a", href=True):
+            href = a["href"]
+            if "/p-r" in href and href not in seen_store_urls:
+                seen_store_urls.add(href)
+                all_store_urls.append(href)
+
+    # Fetch all store pages in parallel; collect brochures + products from each
     brochures: list[dict] = []
     products: list[dict] = []
     seen_brochure_ids: set = set()
@@ -134,12 +135,12 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
                 continue
             info = data["props"]["pageProps"].get("pageInformation", {})
 
-            # Brochure: prefer the viewer entry (the one currently open on this store page)
+            # Brochure
             brochure_candidates = (
                 info.get("brochures", {}).get("viewer", [])
                 or info.get("brochures", {}).get("topRanked", [])
             )
-            for b in brochure_candidates[:1]:  # one brochure per store is enough
+            for b in brochure_candidates[:1]:
                 bid = b.get("contentId") or b.get("id")
                 if bid in seen_brochure_ids:
                     continue
@@ -167,7 +168,6 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
                 if oid in seen_product_ids:
                     continue
                 seen_product_ids.add(oid)
-
                 retailer_name = o.get("publisherName", "")
                 prices = o.get("prices", {})
                 img = o.get("offerImages", {}).get("url", {}).get("normal", "")
@@ -202,7 +202,7 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
 
 
 def main() -> None:
-    print(f"Fetching from {BASE_URL} …", file=sys.stderr)
+    print(f"Fetching from {CITY_SLUGS} …", file=sys.stderr)
     try:
         brochures, products = fetch_all()
     except requests.HTTPError as e:
