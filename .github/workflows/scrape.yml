@@ -27,9 +27,6 @@ jobs:
       - name: Install dependencies
         run: pip install requests beautifulsoup4 pillow
 
-      - name: Clear vision cache (force full re-scrape)
-        run: echo '{}' > leaflet_offers_cache.json
-
       - name: Build index.html with full vision scraping
         env:
           AICORE_CLIENT_ID: ${{ secrets.AICORE_CLIENT_ID }}

@@ -134,6 +134,8 @@ def _fetch_all_pm_leaflets(already_scraped_retailers: set[str]) -> list[dict]:
         if retailer in already_scraped_retailers:
             continue
         leaflets = _fetch_pm_leaflets_for(retailer, slug, href_filter)
+        if not leaflets:
+            print(f"  prospektmaschine: keine Daten für {retailer} (/{slug}/)", file=sys.stderr)
         results.extend(leaflets)
     return results
 
@@ -427,6 +429,11 @@ def _scrape_pm_leaflet(brochure_id: str, detail_url: str, retailer: str,
 
 # ── main entry point ──────────────────────────────────────────────────────────
 
+def _cache_key(leaflet: dict) -> str:
+    """Cache key = leaflet_id + valid_from — erkennt neue Prospekte auch bei gleicher ID."""
+    return f"{leaflet.get('leaflet_id', '')}|{leaflet.get('valid_from', '')}"
+
+
 def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
     """
     Scrape offers via Vision AI from:
@@ -448,13 +455,13 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
     mg_to_scrape = [
         l for l in leaflets
         if not str(l.get("leaflet_id", "")).startswith("kd_")
-        and str(l.get("leaflet_id", "")) not in cache
+        and _cache_key(l) not in cache
     ]
 
     # prospektmaschine.de für alle Märkte die marktguru nicht abdeckt
     mg_retailers = {l.get("retailer") for l in leaflets}
     pm_leaflets = _fetch_all_pm_leaflets(already_scraped_retailers=mg_retailers)
-    pm_leaflets = [l for l in pm_leaflets if l["leaflet_id"] not in cache]
+    pm_leaflets = [l for l in pm_leaflets if _cache_key(l) not in cache]
 
     to_scrape_all = mg_to_scrape + pm_leaflets
 
@@ -465,8 +472,9 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
     for l in mg_to_scrape:
         lid = str(l["leaflet_id"])
         offers = _scrape_leaflet(lid, l["retailer"], l.get("valid_from", ""), l.get("valid_until", ""))
-        cache[lid] = {
+        cache[_cache_key(l)] = {
             "retailer":   l["retailer"],
+            "valid_from": l.get("valid_from", ""),
             "scraped_at": datetime.now(timezone.utc).isoformat(),
             "offers":     offers,
         }
@@ -477,8 +485,9 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
             l["_pm_brochure_id"], l["_pm_detail_url"],
             l["retailer"], l.get("valid_from", ""), l.get("valid_until", "")
         )
-        cache[lid] = {
+        cache[_cache_key(l)] = {
             "retailer":   l["retailer"],
+            "valid_from": l.get("valid_from", ""),
             "scraped_at": datetime.now(timezone.utc).isoformat(),
             "offers":     offers,
         }
