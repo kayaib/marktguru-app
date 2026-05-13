@@ -469,8 +469,8 @@ def _scrape_pm_leaflet(brochure_id: str, detail_url: str, retailer: str,
 # ── main entry point ──────────────────────────────────────────────────────────
 
 def _cache_key(leaflet: dict) -> str:
-    """Cache key = leaflet_id + valid_from — erkennt neue Prospekte auch bei gleicher ID."""
-    return f"{leaflet.get('leaflet_id', '')}|{leaflet.get('valid_from', '')}"
+    """Cache key = leaflet_id + valid_from + valid_until — erkennt neue Prospekte auch bei gleicher ID oder leerem valid_from."""
+    return f"{leaflet.get('leaflet_id', '')}|{leaflet.get('valid_from', '')}|{leaflet.get('valid_until', '')}"
 
 
 def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
