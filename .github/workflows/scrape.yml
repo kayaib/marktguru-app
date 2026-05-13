@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: push-to-main
+  cancel-in-progress: false
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
