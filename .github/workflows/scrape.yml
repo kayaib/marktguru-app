@@ -38,12 +38,12 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
           git add docs/index.html docs/images/ leaflet_offers_cache.json || true
           if git diff --cached --quiet; then
             echo "No changes."
           else
             git commit -m "chore: daily scrape $(date -u +%Y-%m-%dT%H:%M)"
-            git fetch origin main
-            git rebase origin/main
             git push
           fi
