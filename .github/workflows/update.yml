@@ -39,7 +39,8 @@ jobs:
             echo "No changes."
           else
             git commit -m "chore: update promotions $(date -u +%Y-%m-%dT%H:%M)"
-            git pull --rebase
+            git fetch origin main
+            git rebase origin/main
             git push
           fi
 
