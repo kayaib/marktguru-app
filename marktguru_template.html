@@ -577,7 +577,8 @@
 
     /* ── Pull-to-refresh ── */
     #ptr-indicator {
-      position: fixed; top: 0; left: 50%; transform: translateX(-50%) translateY(-60px);
+      position: fixed; top: env(safe-area-inset-top, 0px); left: 50%;
+      transform: translateX(-50%) translateY(-60px);
       z-index: 999; background: var(--surface); border-radius: 50%;
       width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
       box-shadow: 0 2px 10px rgba(0,0,0,0.18);
@@ -1458,7 +1459,7 @@ function detailOverlayClick(e) {
     const dy = e.touches[0].clientY - startY;
     if (dy > 10) {
       const progress = Math.min(dy / THRESHOLD, 1);
-      indicator.style.transform = `translateX(-50%) translateY(${-60 + progress * 76}px)`;
+      indicator.style.transform = `translateX(-50%) translateY(${-60 + progress * 80}px)`;
       indicator.classList.add("visible");
       if (dy >= THRESHOLD && !triggered) triggered = true;
     }
@@ -1468,7 +1469,7 @@ function detailOverlayClick(e) {
     if (!pulling) return;
     pulling = false;
     if (triggered) {
-      indicator.style.transform = "translateX(-50%) translateY(16px)";
+      indicator.style.transform = "translateX(-50%) translateY(20px)";
       setTimeout(() => location.reload(), 300);
     } else {
       indicator.style.transform = "translateX(-50%) translateY(-60px)";
