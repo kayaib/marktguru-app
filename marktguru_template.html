@@ -339,6 +339,14 @@
     .pc-retailer {
       font-size: 0.72rem; color: var(--primary); font-weight: 700;
       margin-top: auto; padding-top: 5px;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .retailer-logo {
+      width: 16px; height: 16px; border-radius: 3px;
+      object-fit: contain; flex-shrink: 0;
+    }
+    .lc-retailer {
+      display: flex; align-items: center; gap: 5px;
     }
     .pc-price-row {
       display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-top: 3px;
@@ -433,7 +441,7 @@
       background: var(--bg); flex-shrink: 0;
     }
     .dp-header-text { flex: 1; min-width: 0; }
-    .dp-retailer { font-size: 0.75rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+    .dp-retailer { font-size: 0.75rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; display: flex; align-items: center; gap: 5px; }
     .dp-title { font-size: 1rem; font-weight: 700; line-height: 1.3; }
     .dp-brand { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
     .dp-close {
@@ -567,6 +575,19 @@
     .el-total-label { font-size: 0.85rem; font-weight: 600; color: var(--text-2); }
     .el-total-value { font-size: 1.2rem; font-weight: 800; color: var(--text); }
 
+    /* ── Pull-to-refresh ── */
+    #ptr-indicator {
+      position: fixed; top: 0; left: 50%; transform: translateX(-50%) translateY(-60px);
+      z-index: 999; background: var(--surface); border-radius: 50%;
+      width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+      transition: transform 0.2s ease, opacity 0.2s ease;
+      opacity: 0;
+    }
+    #ptr-indicator.visible { opacity: 1; }
+    #ptr-indicator svg { animation: ptr-spin 0.7s linear infinite; }
+    @keyframes ptr-spin { to { transform: rotate(360deg); } }
+
     /* ── Mobile ── */
     @media (max-width: 480px) {
       .nav-brand small { display: none; }
@@ -600,6 +621,12 @@
 <body>
 
 <script>window.__DATA__ = __DATA_PLACEHOLDER__;</script>
+
+<div id="ptr-indicator">
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--primary)" stroke-width="2.5">
+    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+  </svg>
+</div>
 
 <nav>
   <div class="nav-top">
@@ -661,6 +688,33 @@
 <main id="content"></main>
 
 <script>
+// ── Retailer logos ────────────────────────────────────────────────────────────
+const RETAILER_DOMAINS = {
+  "REWE":                  "rewe.de",
+  "PENNY":                 "penny.de",
+  "Kaufland":              "kaufland.de",
+  "Lidl":                  "lidl.de",
+  "ALDI SÜD":              "aldi-sued.de",
+  "ALDI Nord":             "aldi-nord.de",
+  "EDEKA":                 "edeka.de",
+  "E center":              "edeka.de",
+  "Netto Marken-Discount": "netto-online.de",
+  "Norma":                 "norma-online.de",
+  "Marktkauf":             "marktkauf.de",
+  "nahkauf":               "nahkauf.de",
+  "dm-drogerie markt":     "dm.de",
+  "Rossmann":              "rossmann.de",
+  "Müller":                "mueller.de",
+  "tegut":                 "tegut.com",
+  "Wasgau":                "wasgau.de",
+};
+
+function retailerLogo(retailer) {
+  const domain = RETAILER_DOMAINS[retailer];
+  if (!domain) return "";
+  return `<img class="retailer-logo" src="https://www.google.com/s2/favicons?domain=${domain}&sz=32" alt="" loading="lazy">`;
+}
+
 // ── State ──────────────────────────────────────────────────────────────────
 let allLeaflets = [];
 let allOffers   = [];
@@ -1105,7 +1159,7 @@ function renderProspekte() {
         <img src="${esc(l.cover_url)}" alt="${esc(l.retailer)}" loading="lazy"
              onerror="this.style.background='#eee';this.style.display='block'">
         <div class="lc-body">
-          <div class="lc-retailer">${esc(l.retailer||"Prospekt")}${favMark}</div>
+          <div class="lc-retailer">${retailerLogo(l.retailer)}${esc(l.retailer||"Prospekt")}${favMark}</div>
           <div class="lc-meta">
             <span class="offers-pill">${l.offer_count} Angebote</span>
           </div>
@@ -1199,7 +1253,7 @@ function renderAngebote() {
         ? `<img src="${esc(o.image_url)}" alt="${esc(o.title)}" loading="lazy"
                onerror="this.parentNode.innerHTML='<div class=no-img>🛒</div>'">`
         : `<div class="no-img">🛒</div>`;
-      const brand = o.brand && o.brand !== "thisisnobrand123" ? `<div class="pc-brand">${esc(o.brand)}</div>` : "";
+      const brand = o.brand ? `<div class="pc-brand">${esc(o.brand)}</div>` : "";
       const desc  = buildDesc(o) ? `<div class="pc-desc">${esc(buildDesc(o))}</div>` : "";
       const unit  = o.price_per_unit ? `<div class="pc-unit">${esc(o.price_per_unit)}</div>` : "";
       const orig  = o.original_price ? `<span class="pc-orig">${esc(o.original_price)}</span>` : "";
@@ -1213,7 +1267,7 @@ function renderAngebote() {
             <span class="pc-industry ${indCss}">${esc(o.industry)}</span>
             <div class="pc-title">${esc(o.title)}</div>
             ${brand}${desc}
-            <div class="pc-retailer">${esc(o.retailer)}${favMark}</div>
+            <div class="pc-retailer">${retailerLogo(o.retailer)}${esc(o.retailer)}${favMark}</div>
             <div class="pc-price-row">
               <span class="pc-price">${esc(o.price)}</span>${orig}
             </div>
@@ -1355,7 +1409,7 @@ function openDetail(id) {
     <div class="dp-header">
       ${img}
       <div class="dp-header-text">
-        <div class="dp-retailer">${esc(o.retailer)}</div>
+        <div class="dp-retailer">${retailerLogo(o.retailer)}${esc(o.retailer)}</div>
         <div class="dp-title">${esc(o.title)}</div>
         ${brand}
       </div>
@@ -1388,6 +1442,40 @@ function closeDetail() {
 function detailOverlayClick(e) {
   if (e.target === document.getElementById("detail-overlay")) closeDetail();
 }
+
+// ── Pull-to-refresh ──────────────────────────────────────────────────────────
+(function() {
+  let startY = 0, pulling = false, triggered = false;
+  const indicator = document.getElementById("ptr-indicator");
+  const THRESHOLD = 80;
+
+  document.addEventListener("touchstart", e => {
+    if (window.scrollY === 0) { startY = e.touches[0].clientY; pulling = true; triggered = false; }
+  }, { passive: true });
+
+  document.addEventListener("touchmove", e => {
+    if (!pulling) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy > 10) {
+      const progress = Math.min(dy / THRESHOLD, 1);
+      indicator.style.transform = `translateX(-50%) translateY(${-60 + progress * 76}px)`;
+      indicator.classList.add("visible");
+      if (dy >= THRESHOLD && !triggered) triggered = true;
+    }
+  }, { passive: true });
+
+  document.addEventListener("touchend", () => {
+    if (!pulling) return;
+    pulling = false;
+    if (triggered) {
+      indicator.style.transform = "translateX(-50%) translateY(16px)";
+      setTimeout(() => location.reload(), 300);
+    } else {
+      indicator.style.transform = "translateX(-50%) translateY(-60px)";
+      indicator.classList.remove("visible");
+    }
+  });
+})();
 
 loadData();
 </script>
