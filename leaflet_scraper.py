@@ -70,8 +70,6 @@ _PM_MARKETS = [
     ("dm-drogerie markt",     "dm-drogerie",   None),
     ("E center",              "e-center",      None),
     ("EDEKA",                 "edeka",         None),
-    ("Globus",                "globus",        None),
-    ("Globus Baumarkt",       "globus-baumarkt", None),
     ("Kaufland",              "kaufland",      None),
     ("Lidl",                  "lidl",          None),
     ("Marktkauf",             "marktkauf",     None),

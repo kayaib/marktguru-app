@@ -20,8 +20,6 @@ ALLOWED_RETAILERS = {
     "dm-drogerie markt",
     "e center",
     "edeka",
-    "globus",
-    "globus baumarkt",
     "kaufland",
     "lidl",
     "marktkauf",
@@ -44,7 +42,6 @@ _INDUSTRY_MAP = {
     "edeka":                   "Supermarkt",
     "kaufland":                "Supermarkt",
     "marktkauf":               "Supermarkt",
-    "globus":                  "Supermarkt",
     "wasgau":                  "Supermarkt",
     "tegut":                   "Supermarkt",
     "penny":                   "Discounter",
@@ -59,7 +56,6 @@ _INDUSTRY_MAP = {
     "dm":                      "Drogerie & Gesundheit",
     "rossmann":                "Drogerie & Gesundheit",
     "müller":                  "Drogerie & Gesundheit",
-    "globus baumarkt":         "Baumarkt",
 }
 
 
@@ -82,8 +78,6 @@ _CANONICAL_NAMES = {
     "dm-drogerie markt":     "dm-drogerie markt",
     "e center":              "E center",
     "edeka":                 "EDEKA",
-    "globus":                "Globus",
-    "globus baumarkt":       "Globus Baumarkt",
     "kaufland":              "Kaufland",
     "lidl":                  "Lidl",
     "marktkauf":             "Marktkauf",
