@@ -3,6 +3,7 @@ name: Update promotions
 on:
   schedule:
     - cron: "0 18 * * *"   # every day at 18:00 UTC (20:00 CEST)
+    - cron: "0 12 * * *"   # every day at 12:00 UTC (14:00 CEST) — catches late-listed leaflets
   workflow_dispatch:
 
 permissions:
@@ -22,14 +23,18 @@ jobs:
       - name: Install dependencies
         run: pip install requests beautifulsoup4 pillow
 
-      - name: Build index.html (API only, use cached vision data)
+      - name: Build index.html with vision scraping
+        env:
+          AICORE_CLIENT_ID: ${{ secrets.AICORE_CLIENT_ID }}
+          AICORE_CLIENT_SECRET: ${{ secrets.AICORE_CLIENT_SECRET }}
+          AICORE_DEPLOYMENT_ID: ${{ secrets.AICORE_DEPLOYMENT_ID }}
         run: python build.py
 
       - name: Commit and push if changed
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/index.html docs/images/ || true
+          git add docs/index.html docs/images/ leaflet_offers_cache.json || true
           if git diff --cached --quiet; then
             echo "No changes."
           else
