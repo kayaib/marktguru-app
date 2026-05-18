@@ -1,0 +1,13 @@
+{
+  "name": "marktguru-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0"
+  }
+}

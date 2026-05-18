@@ -233,7 +233,11 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
             if key not in _seen_retailers:
                 _seen_retailers.add(key)
                 mg_leaflets_deduped.append(l)
-        vision_offers = vs.scrape_missing_leaflets(mg_leaflets_deduped)
+        vision_offers = vs.scrape_missing_leaflets(mg_leaflets_deduped, kd_brochures=[
+            {**b, "retailer": _canonical(b["retailer"])}
+            for b in kd_brochures
+            if _is_allowed(b["retailer"])
+        ])
         if vision_offers:
             vis_seen: set[str] = {
                 _normalize_name(o["retailer"]) + "|" + _normalize_name(o["title"])

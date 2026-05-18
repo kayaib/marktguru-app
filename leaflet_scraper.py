@@ -418,6 +418,59 @@ def _scrape_leaflet(leaflet_id: str, retailer: str,
     return all_offers
 
 
+def _scrape_kd_leaflet(content_id: str, page_image_urls: list[str], retailer: str,
+                       valid_from: str, valid_until: str) -> list[dict]:
+    """Scrape a kaufda/bonial brochure via Vision AI using pre-collected page URLs."""
+    if not AICORE_CLIENT_ID or not AICORE_CLIENT_SECRET or not AICORE_DEPLOYMENT_ID:
+        return []
+    if not page_image_urls:
+        print(f"    {retailer} (kd_{content_id}): no page URLs", file=sys.stderr)
+        return []
+
+    token = _get_token()
+    print(f"    Scraping {retailer} (kaufda {content_id}, {len(page_image_urls)} pages)…",
+          file=sys.stderr)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {pool.submit(_fetch_page_bytes, url): i for i, url in enumerate(page_image_urls)}
+        page_images: dict[int, bytes] = {}
+        for future in as_completed(futures):
+            page = futures[future]
+            b = future.result()
+            if b:
+                page_images[page] = b
+
+    all_offers: list[dict] = []
+    seen_titles: set[str] = set()
+
+    def _analyze_one_kd_page(page: int) -> list[dict]:
+        try:
+            raw = _analyze_page(page_images[page], retailer, token)
+            results = []
+            for o in raw:
+                title = o.get("title", "").strip()
+                if title:
+                    safe = re.sub(r"[^a-z0-9]", "_", title.lower())[:40]
+                    oid = f"vis_kd{content_id[:8]}_{safe}"
+                    results.append((title, _build_offer(o, oid, retailer, valid_from, valid_until, page_images[page])))
+            return results
+        except Exception as e:
+            print(f"    Page {page} error: {e}", file=sys.stderr)
+            return []
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        page_futures = {pool.submit(_analyze_one_kd_page, p): p for p in sorted(page_images.keys())}
+        for future in as_completed(page_futures):
+            for title, offer in future.result():
+                if title.lower() not in seen_titles:
+                    seen_titles.add(title.lower())
+                    all_offers.append(offer)
+
+    print(f"    {retailer}: extracted {len(all_offers)} offers "
+          f"({sum(1 for o in all_offers if o['has_image'])} with images)", file=sys.stderr)
+    return all_offers
+
+
 def _scrape_pm_leaflet(brochure_id: str, detail_url: str, retailer: str,
                        valid_from: str, valid_until: str) -> list[dict]:
     """Scrape a prospektmaschine brochure via Vision AI."""
@@ -479,11 +532,12 @@ def _cache_key(leaflet: dict) -> str:
     return f"{leaflet.get('leaflet_id', '')}|{leaflet.get('valid_from', '')}|{leaflet.get('valid_until', '')}"
 
 
-def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
+def scrape_missing_leaflets(leaflets: list[dict], kd_brochures: list[dict] | None = None) -> list[dict]:
     """
     Scrape offers via Vision AI from:
     1. marktguru leaflets (passed in)
-    2. prospektmaschine.de for all known markets not already covered by marktguru
+    2. kaufda brochures (kd_brochures) — full page images from bonial.biz CDN
+    3. prospektmaschine.de for all known markets not already covered by marktguru/kaufda
     Uses cache keyed by leaflet_id. Returns list of offers.
     """
     if not AICORE_CLIENT_ID or not AICORE_CLIENT_SECRET or not AICORE_DEPLOYMENT_ID:
@@ -504,12 +558,20 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
         and _cache_key(l) not in cache
     ]
 
-    # prospektmaschine.de für alle Märkte die marktguru nicht abdeckt
-    mg_retailers = {l.get("retailer") for l in leaflets}
-    pm_leaflets = _fetch_all_pm_leaflets(already_scraped_retailers=mg_retailers)
+    # kaufda brochures — filter by allowlist and cache
+    kd_to_scrape = [
+        b for b in (kd_brochures or [])
+        if b.get("retailer") in VISION_ALLOWLIST
+        and b.get("page_image_urls")
+        and _cache_key(b) not in cache
+    ]
+
+    # prospektmaschine.de für alle Märkte die weder marktguru noch kaufda abdecken
+    covered_retailers = {l.get("retailer") for l in leaflets} | {b.get("retailer") for b in (kd_brochures or [])}
+    pm_leaflets = _fetch_all_pm_leaflets(already_scraped_retailers=covered_retailers)
     pm_leaflets = [l for l in pm_leaflets if _cache_key(l) not in cache]
 
-    to_scrape_all = mg_to_scrape + pm_leaflets
+    to_scrape_all = mg_to_scrape + kd_to_scrape + pm_leaflets
 
     if to_scrape_all:
         print(f"  Vision scraping {len(to_scrape_all)} leaflets in parallel: "
@@ -521,6 +583,19 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
         return _cache_key(l), {
             "retailer":   l["retailer"],
             "valid_from": l.get("valid_from", ""),
+            "scraped_at": datetime.now(timezone.utc).isoformat(),
+            "offers":     offers,
+        }
+
+    def _scrape_kd(b: dict) -> tuple[str, dict]:
+        content_id = str(b["leaflet_id"])[3:]  # strip "kd_" prefix
+        offers = _scrape_kd_leaflet(
+            content_id, b["page_image_urls"],
+            b["retailer"], b.get("valid_from", ""), b.get("valid_until", "")
+        )
+        return _cache_key(b), {
+            "retailer":   b["retailer"],
+            "valid_from": b.get("valid_from", ""),
             "scraped_at": datetime.now(timezone.utc).isoformat(),
             "offers":     offers,
         }
@@ -540,8 +615,9 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
     max_parallel = min(len(to_scrape_all), 4)
     with ThreadPoolExecutor(max_workers=max_parallel) as pool:
         mg_futures  = [pool.submit(_scrape_mg, l) for l in mg_to_scrape]
+        kd_futures  = [pool.submit(_scrape_kd, b) for b in kd_to_scrape]
         pm_futures  = [pool.submit(_scrape_pm, l) for l in pm_leaflets]
-        for future in as_completed(mg_futures + pm_futures):
+        for future in as_completed(mg_futures + kd_futures + pm_futures):
             try:
                 key, entry = future.result()
                 cache[key] = entry

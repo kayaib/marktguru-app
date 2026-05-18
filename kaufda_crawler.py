@@ -149,13 +149,23 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
                 name = pub.get("name", "")
                 pages = b.get("pages", [])
                 cover = pages[0].get("url", {}).get("normal", "") if pages else ""
+                # Collect all high-res page image URLs for vision scraping
+                page_image_urls = [
+                    p.get("url", {}).get("large", "") or p.get("url", {}).get("normal", "")
+                    for p in pages
+                    if p.get("url", {}).get("large") or p.get("url", {}).get("normal")
+                ]
                 brochures.append({
+                    "leaflet_id": f"kd_{bid}",
                     "retailer": name,
                     "title": b.get("title", ""),
-                    "page_count": b.get("pageCount", ""),
+                    "page_count": b.get("pageCount", len(pages)),
                     "valid_from": _fmt_date(b.get("validFrom")),
                     "valid_until": _fmt_date(b.get("validUntil")),
+                    "valid_from_raw": b.get("validFrom", ""),
+                    "valid_until_raw": b.get("validUntil", ""),
                     "cover_image_url": cover,
+                    "page_image_urls": page_image_urls,
                     "retailer_url": store_url,
                     "category": _category_for(name),
                 })
