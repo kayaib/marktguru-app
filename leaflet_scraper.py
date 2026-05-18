@@ -22,6 +22,14 @@ from bs4 import BeautifulSoup
 from PIL import Image
 import requests
 
+# Only scrape and return offers for these retailers — keeps AI Core costs down
+VISION_ALLOWLIST = {
+    "REWE", "PENNY", "Kaufland", "Lidl", "ALDI SÜD", "ALDI Nord",
+    "EDEKA", "E center", "Netto Marken-Discount", "Norma", "NORMA",
+    "Marktkauf", "nahkauf", "dm-drogerie markt", "Rossmann", "ROSSMANN",
+    "Müller", "tegut", "Wasgau",
+}
+
 CACHE_FILE  = Path(__file__).parent / "leaflet_offers_cache.json"
 IMAGES_DIR  = Path(__file__).parent / "docs" / "images"
 CDN_HOST    = "mg2de.b-cdn.net"
@@ -492,6 +500,7 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
     mg_to_scrape = [
         l for l in leaflets
         if not str(l.get("leaflet_id", "")).startswith("kd_")
+        and l.get("retailer") in VISION_ALLOWLIST
         and _cache_key(l) not in cache
     ]
 
@@ -547,7 +556,8 @@ def scrape_missing_leaflets(leaflets: list[dict]) -> list[dict]:
 
     all_offers: list[dict] = []
     for entry in cache.values():
-        all_offers.extend(entry.get("offers", []))
+        if entry.get("retailer") in VISION_ALLOWLIST:
+            all_offers.extend(entry.get("offers", []))
     return all_offers
 
 
