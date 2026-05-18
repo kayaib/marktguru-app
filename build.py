@@ -26,6 +26,12 @@ def main() -> None:
         for o in offers:
             o["is_food"] = classification.get(str(o["id"]))  # True/False/None if unknown
 
+    offer_counts: dict[str, int] = {}
+    for o in offers:
+        offer_counts[o["retailer"]] = offer_counts.get(o["retailer"], 0) + 1
+    for l in leaflets:
+        l["offer_count"] = offer_counts.get(l["retailer"], 0)
+
     data_json = json.dumps(
         {"leaflets": leaflets, "offers": offers},
         ensure_ascii=False,
