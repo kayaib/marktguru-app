@@ -93,18 +93,17 @@ def _fetch_industry(industry_id: int, industry_name: str, api_key: str, zip_code
     """Fetch all offers for one industry, paginating if needed."""
     h = _api_headers(api_key)
     limit = 512
-    url = (f"{API_BASE}/offers?as=web&zipCode={zip_code}"
-           f"&industryId={industry_id}&limit={limit}&offset=0")
-    r = requests.get(url, headers=h, timeout=20)
+    base_url = (f"{API_BASE}/offers?as=web&zipCode={zip_code}"
+                f"&industryId={industry_id}&limit={limit}&offset=")
+    r = requests.get(base_url + "0", headers=h, timeout=20)
     r.raise_for_status()
     data = r.json()
     results = data.get("results") or []
     total = data.get("totalResults", 0)
 
-    # Paginate if more results exist
     offset = limit
     while offset < total:
-        r2 = requests.get(url.replace("offset=0", f"offset={offset}"), headers=h, timeout=20)
+        r2 = requests.get(base_url + str(offset), headers=h, timeout=20)
         r2.raise_for_status()
         page = r2.json().get("results") or []
         results.extend(page)
