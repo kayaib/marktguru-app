@@ -722,7 +722,14 @@ let allOffers   = [];
 let activeTab      = "Alle";let activeSort     = "default";
 let activeRetailer = "";
 let searchQuery    = "";
-let activeKW       = new Set(["alle"]);
+function _thisWeekKey() {
+  const d = new Date(); d.setHours(0,0,0,0);
+  const wd = d.getDay() || 7;
+  d.setDate(d.getDate() - wd + 1);
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), day = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+let activeKW       = new Set([_thisWeekKey()]);
 let activeView     = "angebote";  // "angebote" | "prospekte"
 let favourites     = new Set(JSON.parse(localStorage.getItem("fav_retailers") || "[]"));
 
