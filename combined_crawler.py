@@ -210,11 +210,11 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
     all_offers   = mg_offers_filtered + kd_converted
     all_leaflets = mg_leaflets_filtered + kd_leaflets
 
-    # ── Prospekte deduplizieren (gleicher Händler aus beiden Quellen) ─────────
+    # ── Prospekte deduplizieren (gleiche leaflet_id aus verschiedenen ZIP-Codes) ─
     leaflet_seen: set[str] = set()
     deduped_leaflets: list[dict] = []
     for l in all_leaflets:
-        key = _normalize_name(l["retailer"])
+        key = str(l.get("leaflet_id", "")) or _normalize_name(l["retailer"])
         if key in leaflet_seen:
             continue
         leaflet_seen.add(key)
@@ -224,14 +224,15 @@ def fetch_all() -> tuple[list[dict], list[dict]]:
     # ── Vision scraping für Prospekte ohne Angebote ───────────────────────────
     try:
         import leaflet_scraper as vs
-        # Deduplizieren nach Händler vor dem Vision-Scrape (verhindert mehrfaches Scrapen
-        # desselben Prospekts aus verschiedenen ZIP-Codes)
+        # Deduplizieren nach leaflet_id vor dem Vision-Scrape (verhindert mehrfaches Scrapen
+        # desselben Prospekts aus verschiedenen ZIP-Codes, erlaubt aber mehrere Prospekte
+        # desselben Händlers mit unterschiedlichen leaflet_ids)
         mg_leaflets_deduped: list[dict] = []
-        _seen_retailers: set[str] = set()
+        _seen_leaflet_ids: set[str] = set()
         for l in mg_leaflets_filtered:
-            key = _normalize_name(l["retailer"])
-            if key not in _seen_retailers:
-                _seen_retailers.add(key)
+            key = str(l.get("leaflet_id", "")) or _normalize_name(l["retailer"])
+            if key not in _seen_leaflet_ids:
+                _seen_leaflet_ids.add(key)
                 mg_leaflets_deduped.append(l)
         vision_offers = vs.scrape_missing_leaflets(mg_leaflets_deduped, kd_brochures=[
             {**b, "retailer": _canonical(b["retailer"])}
