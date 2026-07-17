@@ -517690,5 +517690,32 @@
         "source": "vision"
       }
     ]
+  },
+  "kd_97d7eef7-a0a1-4c35-9f40-c5aa4a5ded5e|30.06.2026|31.07.2026": {
+    "retailer": "Netto Marken-Discount",
+    "valid_from": "30.06.2026",
+    "scraped_at": "2026-07-17T18:50:27.671567+00:00",
+    "offers": [
+      {
+        "id": "vis_kd97d7eef7_holzkohlegrill_smoker_grand_ontario",
+        "title": "Holzkohlegrill/Smoker Grand Ontario",
+        "description": "mit Ascheauffang, 2 justierbare Lüftungsöffnungen, inkl. Thermometer und Flaschenöffner, modernes und robustes Design für lange Lebensdauer und einfachen Transport, Maße: ca. B 154 x H 131 x T 68,5 cm",
+        "brand": "El Fuego",
+        "retailer": "Netto Marken-Discount",
+        "retailer_id": "",
+        "industry": "",
+        "category": "",
+        "price": "369,99 €",
+        "price_value": 369.99,
+        "original_price": "449,95 €",
+        "price_per_unit": "",
+        "discount_pct": 17,
+        "valid_from": "30.06.2026",
+        "valid_until": "31.07.2026",
+        "image_url": "images/vis_kd97d7eef7_holzkohlegrill_smoker_grand_ontario.jpg",
+        "has_image": true,
+        "source": "vision"
+      }
+    ]
   }
 }
