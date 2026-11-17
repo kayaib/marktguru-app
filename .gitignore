@@ -4,3 +4,7 @@ __pycache__/
 node_modules/
 playwright-report/
 test-results/
+
+# Cache files
+leaflet_offers_cache.json
+classification_cache.json
