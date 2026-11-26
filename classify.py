@@ -15,7 +15,7 @@ import requests
 CACHE_FILE = Path(__file__).parent / "classification_cache.json"
 BATCH_SIZE = 50
 
-AICORE_AUTH_URL  = "https://retail-ai-g1f2q3e8.authentication.eu10.hana.ondemand.com"
+AICORE_AUTH_URL  = "https://vf11s5lj065yjnf4.authentication.eu10.hana.ondemand.com"
 AICORE_API_URL   = "https://api.ai.prod.eu-central-1.aws.ml.hana.ondemand.com"
 AICORE_CLIENT_ID = os.environ.get("AICORE_CLIENT_ID", "")
 AICORE_CLIENT_SECRET = os.environ.get("AICORE_CLIENT_SECRET", "")
